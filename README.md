@@ -1,64 +1,122 @@
-# Terraform Provider Scaffolding (Terraform Plugin Framework)
+# hrobot-go
 
-_This template repository is built on the [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework). The template repository built on the [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk) can be found at [terraform-provider-scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding). See [Which SDK Should I Use?](https://developer.hashicorp.com/terraform/plugin/framework-benefits) in the Terraform documentation for additional information._
+Go client library and Terraform provider for the Hetzner Robot API.
 
-This repository is a *template* for a [Terraform](https://www.terraform.io) provider. It is intended as a starting point for creating Terraform providers, containing:
+We absolutely love [Hetzner auction servers](https://www.hetzner.com/sb/) but their terraform support was quite lacking.
 
-- A resource and a data source (`internal/provider/`),
-- Examples (`examples/`) and generated documentation (`docs/`),
-- Miscellaneous meta files.
+This is written with the help of Claude Code but tested locally on numerous times.
 
-These files contain boilerplate code that you will need to edit to create your own Terraform provider. Tutorials for creating Terraform providers can be found on the [HashiCorp Developer](https://developer.hashicorp.com/terraform/tutorials/providers-plugin-framework) platform. _Terraform Plugin Framework specific guides are titled accordingly._
+## Components
 
-Please see the [GitHub template repository documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template) for how to create a new repository from this template on GitHub.
+The repository contains 2 ways to interact with Hetzner:
 
-Once you've written your provider, you'll want to [publish it on the Terraform Registry](https://developer.hashicorp.com/terraform/registry/providers/publishing) so that others can use it.
+- CLI tool `hrobot`
+- Terraform / OpenTofu provider
 
-## Requirements
+### CLI Tool
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
-- [Go](https://golang.org/doc/install) >= 1.24
+A command-line interface is available in `cmd/hrobot/` for quick API interactions.
 
-## Building The Provider
+#### Building the CLI
 
-1. Clone the repository
-1. Enter the repository directory
-1. Build the provider using the Go `install` command:
+```bash
+# Build the binary
+go build -o hrobot cmd/hrobot/main.go
 
-```shell
-go install
+# Or install it to your $GOPATH/bin
+go install ./cmd/hrobot
 ```
 
-## Adding Dependencies
+#### Usage
 
-This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
-Please see the Go documentation for the most up to date information about using Go modules.
+Set your credentials as environment variables:
 
-To add a new dependency `github.com/author/dependency` to your Terraform provider:
-
-```shell
-go get github.com/author/dependency
-go mod tidy
+```bash
+export HETZNER_ROBOT_USER="your-username"
+export HETZNER_ROBOT_PASSWORD="your-password"
 ```
 
-Then commit the changes to `go.mod` and `go.sum`.
+List all servers:
 
-## Using the provider
+```bash
+./hrobot servers
+```
 
-Fill this in for each provider
+Get details for a specific server:
 
-## Developing the Provider
+```bash
+./hrobot server 1234567
+```
 
-If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
+### Terraform Provider
 
-To compile the provider, run `go install`. This will build the provider and put the provider binary in the `$GOPATH/bin` directory.
+See all examples in [./examples/README.md](./examples/README.md).
 
-To generate or update documentation, run `make generate`.
+## Development
 
-In order to run the full suite of Acceptance tests, run `make testacc`.
+Install and activate [devenv](https://devenv.sh). There are quite a few hacks needed to build and test terraform plugins locally.
 
-*Note:* Acceptance tests create real resources, and often cost money to run.
+This also ensures that you have proper git hooks in place. See more how we use devenv by looking at `./devenv.nix`.
 
-```shell
+### Building the Library
+
+```bash
+go mod download
+
+# Build terraform provider
+go build -v -o terraform-provider-hrobot
+
+# Build 'hrobot' cli
+go build -v -o hrobot cmd/hrobot/main.go
+```
+
+### Running Tests
+
+The repository includes two types of tests:
+
+#### Unit Tests
+
+Unit tests use mocked HTTP responses and don't require credentials. They run quickly and test the API client logic:
+
+```bash
+# Using make (recommended)
+make test
+
+# Or using go directly
+go test -v -cover ./...
+```
+
+**Current Coverage:** 61.6% for `pkg/hrobot/`
+
+#### Acceptance Tests (Integration Tests)
+
+⚠️ **Warning:** Acceptance tests make REAL API calls to Hetzner and may create/modify/delete resources!
+
+```bash
+# Set credentials first
+export HROBOT_USERNAME='#ws+XXXXXXX'
+export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'
+
+# Run acceptance tests
 make testacc
 ```
+
+## API Documentation
+
+Full Hetzner Robot API documentation: https://robot.hetzner.com/doc/webservice/en.html
+
+## License
+
+Mozilla Public License Version 2.0 - see [LICENSE](./LICENSE) for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Notes
+
+- Firewall updates can take 30-40 seconds to apply
+- IPv6 filtering has limitations (see Hetzner documentation)
+- ICMPv6 traffic is always allowed
+- Default firewall policy is discard (deny)
+- Some product servers have setup fees of 79€. Check before buying.
