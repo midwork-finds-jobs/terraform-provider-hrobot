@@ -31,3 +31,7 @@ vendor/
 # The compiled binaries (in root directory only)
 /hrobot
 /terraform-provider-hrobot
+
+# Helper to create the initial gpg signing keys
+keys/*
+!keys/setup-gpg-secrets.sh

@@ -28,5 +28,6 @@ project {
     ".golangci.yml",
     ".goreleaser.yml",
     ".pre-commit-config.yaml",
+    "keys/setup-gpg-secrets.sh",
   ]
 }
