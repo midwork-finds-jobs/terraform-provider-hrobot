@@ -1,35 +1,33 @@
-*.dll
-*.exe
-.DS_Store
-example.tf
-terraform.tfplan
-terraform.tfstate
-bin/
-dist/
-modules-dev/
-/pkg/
-website/.vagrant
-website/.bundle
-website/build
-website/node_modules
-.vagrant/
-*.backup
-./*.tfstate
-.terraform/
-*.log
-*.bak
-*~
-.*.swp
-.idea
-*.iml
+# Devenv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+
+# Go build artifacts
+/hrobot
+*.out
 *.test
-*.iml
+*.prof
 
-website/vendor
+# Coverage
+coverage.out
+coverage.html
 
-# Test exclusions
-!command/test-fixtures/**/*.tfstate
-!command/test-fixtures/**/.terraform/
+# Environment
+.env
 
-# Keep windows files with windows line endings
-*.winfile eol=crlf
+# Go packages
+vendor/
+
+# Don't push claude permissions
+.claude
+
+# The compiled binaries (in root directory only)
+/hrobot
+/terraform-provider-hrobot
