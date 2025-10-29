@@ -3,12 +3,12 @@
 page_title: "hrobot_vswitch Resource - hrobot"
 subcategory: ""
 description: |-
-  Manages vSwitch configuration
+  manages a vswitch in hetzner robot.
 ---
 
 # hrobot_vswitch (Resource)
 
-Manages vSwitch (virtual switch) configuration for creating private networks between servers.
+manages a vswitch in hetzner robot.
 
 ## Example Usage
 
@@ -35,18 +35,14 @@ resource "hrobot_vswitch" "example" {
 
 ### Required
 
-- `name` (String) Name of the vSwitch
-- `vlan` (Number) VLAN ID (must be between 4000 and 4091)
+- `name` (String) name of the vswitch
+- `vlan` (Number) vlan id for the vswitch
+
+### Optional
+
+- `servers` (Set of Number) list of server numbers or IPs to attach to this vswitch
 
 ### Read-Only
 
-- `id` (String) vSwitch identifier
-
-## Import
-
-Import is supported using the following syntax:
-
-```shell
-# Import vSwitch by ID
-terraform import hrobot_vswitch.example 12345
-```
+- `cancelled` (Boolean) whether the vswitch has been cancelled (computed)
+- `id` (Number) vswitch id (computed)

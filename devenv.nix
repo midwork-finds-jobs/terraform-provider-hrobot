@@ -60,6 +60,8 @@
     # Markdown files
     markdownlint = {
       enable = true;
+      # Docs for Terraform Cloud have different linting rules
+      excludes = [ "docs/.*" ];
       settings.configuration = {
         # Max 130 line length, except if it's code
         MD013 = {

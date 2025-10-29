@@ -3,12 +3,12 @@
 page_title: "hrobot_server Data Source - hrobot"
 subcategory: ""
 description: |-
-  Retrieves information about a Hetzner dedicated server
+  Fetches information about a specific server.
 ---
 
 # hrobot_server (Data Source)
 
-Retrieves information about a Hetzner dedicated server by its server ID.
+Fetches information about a specific server.
 
 ## Example Usage
 
@@ -34,14 +34,15 @@ data "hrobot_server" "example" {
 
 ### Required
 
-- `server_id` (Number) The server number to look up
+- `server_id` (Number) Server ID
 
 ### Read-Only
 
-- `id` (String) Server identifier
-- `server_ip` (String) Main IP address of the server
-- `server_ipv6_net` (String) IPv6 network of the server
+- `cancelled` (Boolean) Whether the server is cancelled
+- `datacenter` (String) Datacenter location
+- `paid_until` (String) Paid until date
+- `product` (String) Server product model
+- `server_ip` (String) Primary server IP address
 - `server_name` (String) Server name
-- `product` (String) Server product type
-- `datacenter` (String) Server datacenter location
-- `status` (String) Server status
+- `status` (String) Server status (ready, in process, etc.)
+- `traffic` (String) Traffic limit

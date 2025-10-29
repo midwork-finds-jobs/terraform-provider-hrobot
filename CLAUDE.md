@@ -109,6 +109,10 @@ You MUST follow Conventional Commits in commit messages and PR titles.
 
 You MUST use lowercase letters for log messages.
 
+---
+
+You MUST run `make generate` to format examples and documents to match cloud expectations.
+
 ## Opentofu / Terraform antipatterns
 
 ### Do not suggest user to run curl

@@ -3,12 +3,12 @@
 page_title: "hrobot_ssh_key Resource - hrobot"
 subcategory: ""
 description: |-
-  Manages SSH public keys in Hetzner Robot
+  Manages an SSH public key in Hetzner Robot.
 ---
 
 # hrobot_ssh_key (Resource)
 
-Manages SSH public keys in Hetzner Robot. These keys can be used for server authentication.
+Manages an SSH public key in Hetzner Robot.
 
 ## Example Usage
 
@@ -36,18 +36,10 @@ resource "hrobot_ssh_key" "example" {
 ### Required
 
 - `name` (String) Name for the SSH key
-- `public_key` (String) SSH public key
+- `public_key` (String) SSH public key data in OpenSSH format
 
 ### Read-Only
 
-- `id` (String) SSH key fingerprint
-- `fingerprint` (String) SSH key fingerprint
-
-## Import
-
-Import is supported using the following syntax:
-
-```shell
-# Import SSH key by fingerprint
-terraform import hrobot_ssh_key.example "fb:9e:3d:ce:ca:a4:0b:35:4e:4c:87:67:bb:78:50:4b"
-```
+- `fingerprint` (String) SSH key fingerprint (computed)
+- `size` (Number) SSH key size in bits
+- `type` (String) SSH key type (e.g., RSA, ED25519)
