@@ -1,0 +1,25 @@
+---
+page_title: "Provider: Hetzner Dedicated Servers"
+description: |-
+  The Hetzner Robot (hrobot) provider is used to interact with the resources supported by Hetzner Dedicated Servers.
+---
+
+# Hetzner Dedicated Servers Provider
+
+The Hetzner Robot (hrobot) provider is used to interact with [Hetzner Dedicated Servers](https://www.hetzner.com/dedicated-rootserver/) or [Hetzner Auction Servers](https://www.hetzner.com/sb/).
+
+You can both buy and configure the bare metal servers, firewalls, reverse dns, failover IPs and vswitches.
+
+It uses the [Hetzner Robot Webservice API](https://robot.hetzner.com/doc/webservice/en.html).
+
+Use the navigation to the left to read about the available resources.
+
+Or follow complete example from below:
+
+{{ if .HasExample -}}
+## Example Usage
+
+{{tffile .ExampleFile }}
+{{- end }}
+
+{{ .SchemaMarkdown | trimspace }}

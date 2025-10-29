@@ -11,7 +11,7 @@ See [provider/](provider/) for examples of configuring the provider with authent
 - [hrobot_server](resources/hrobot_server/) - manage dedicated servers (auction or product-based)
 - [hrobot_ssh_key](resources/hrobot_ssh_key/) - manage ssh public keys
 - [hrobot_firewall_template](resources/hrobot_firewall_template/) - create reusable firewall templates
-- [hrobot_failover](resources/hrobot_failover/) - configure failover IP-addresses
+- [hrobot_failover_ip](resources/hrobot_failover_ip/) - configure failover IP-addresses
 - [hrobot_firewall](resources/hrobot_firewall/) - configure firewall for a server using the template
 - [hrobot_vswitch](resources/hrobot_vswitch/) - manage vswitches for server networking
 - [hrobot_rdns](resources/rdns/) - manage Reverse DNS for your server IP-addresses

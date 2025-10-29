@@ -15,32 +15,31 @@ import (
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
+// Ensure HetznerRobotProvider satisfies various provider interfaces.
+var _ provider.Provider = &HetznerRobotProvider{}
 
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
+// HetznerRobotProvider defines the provider implementation.
+type HetznerRobotProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
+// HetznerRobotProviderModel describes the provider data model.
+type HetznerRobotProviderModel struct {
 	Username types.String `tfsdk:"username"`
 	Password types.String `tfsdk:"password"`
-	Endpoint types.String `tfsdk:"endpoint"`
 }
 
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *HetznerRobotProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "hrobot"
 	resp.Version = p.version
 }
 
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *HetznerRobotProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Provider for Hetzner Robot API",
+		MarkdownDescription: "Hetzner Dedicated Servers Provider",
 		Attributes: map[string]schema.Attribute{
 			"username": schema.StringAttribute{
 				MarkdownDescription: "Hetzner Robot API username. Can also be set via HROBOT_USERNAME environment variable.",
@@ -51,16 +50,12 @@ func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaReq
 				Optional:            true,
 				Sensitive:           true,
 			},
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Hetzner Robot API endpoint URL. Defaults to https://robot-ws.your-server.de",
-				Optional:            true,
-			},
 		},
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+func (p *HetznerRobotProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data HetznerRobotProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
@@ -99,19 +94,14 @@ func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.Config
 		return
 	}
 
-	// Create hrobot client with optional custom endpoint
-	var clientOpts []hrobot.ClientOption
-	if !data.Endpoint.IsNull() && data.Endpoint.ValueString() != "" {
-		clientOpts = append(clientOpts, hrobot.WithBaseURL(data.Endpoint.ValueString()))
-	}
-
-	client := hrobot.NewClient(username, password, clientOpts...)
+	// Create hrobot client
+	client := hrobot.NewClient(username, password)
 
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }
 
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *HetznerRobotProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewFirewallResource,
 		NewFirewallTemplateResource,
@@ -123,7 +113,7 @@ func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.R
 	}
 }
 
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *HetznerRobotProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewFirewallDataSource,
 		NewFirewallTemplateDataSource,
@@ -134,7 +124,7 @@ func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasour
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &ScaffoldingProvider{
+		return &HetznerRobotProvider{
 			version: version,
 		}
 	}

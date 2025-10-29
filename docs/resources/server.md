@@ -54,8 +54,9 @@ resource "hrobot_server" "product" {
 
   image = "Ubuntu 22.04 LTS"
 
+  # order it without ipv4 address to save few euros
   public_net {
-    ipv4_enabled = true
+    ipv4_enabled = false
   }
 }
 ```

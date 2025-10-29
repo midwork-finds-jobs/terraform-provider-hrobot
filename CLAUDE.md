@@ -113,6 +113,8 @@ You MUST use lowercase letters for log messages.
 
 You MUST run `make generate` to format examples and documents to match cloud expectations.
 
+**IMPORTANT: Do not edit the files in `./docs/`. They are automatically generated.**
+
 ## Opentofu / Terraform antipatterns
 
 ### Do not suggest user to run curl
