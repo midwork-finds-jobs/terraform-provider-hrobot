@@ -1,3 +1,5 @@
+# Copyright (c) HashiCorp, Inc.
+
 version: "2"
 linters:
   default: none
@@ -28,6 +30,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - tools$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -40,3 +43,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - tools$

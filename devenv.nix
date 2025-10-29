@@ -23,6 +23,11 @@
     go build -v -o hrobot cmd/hrobot/main.go
   '';
 
+  packages = with pkgs; [
+    # Needed to write GPG keys to release this into Terraform cloud
+    gnupg
+  ];
+
   # Replace sed because Claude can't use the sed on MacOS
   scripts.sed.exec = ''
     ${pkgs.gnused}/bin/sed "$@"
@@ -31,6 +36,7 @@
   # https://devenv.sh/languages/
   languages.go.enable = true;
   languages.opentofu.enable = true;
+  languages.terraform.enable = true;
 
   git-hooks.excludes = [
     ".devenv"
@@ -43,7 +49,10 @@
     terraform-format.enable = true;
     terraform-validate.enable = true;
     # Go files
-    golangci-lint.enable = true;
+    golangci-lint = {
+      enable = true;
+      excludes = [ "tools/.*" ];
+    };
     # Nix files
     nixfmt-rfc-style.enable = true;
     # Github Actions
