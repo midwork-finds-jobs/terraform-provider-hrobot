@@ -110,7 +110,7 @@ go test -v -cover ./...
 ```bash
 # Set credentials first
 export HROBOT_USERNAME='#ws+XXXXXXX'
-export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'
+export HROBOT_PASSWORD='YYYYYY'
 
 # Run acceptance tests
 make testacc

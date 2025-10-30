@@ -60,7 +60,7 @@ To limit API access to certain IP-address:
 
 Example usage:
   export HROBOT_USERNAME='#ws+XXXXXXX'
-  export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'`)
+  export HROBOT_PASSWORD='YYYYYY'`)
 	}
 
 	// Create client
@@ -413,7 +413,7 @@ To limit API access to certain IP-address:
 
 Example usage:
   export HROBOT_USERNAME='#ws+XXXXXXX'
-  export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'`, err)
+  export HROBOT_PASSWORD='YYYYYY'`, err)
 	}
 
 	return err

@@ -29,14 +29,14 @@ All examples require authentication to the Hetzner Robot API. You can provide cr
 
 ```bash
 export HROBOT_USERNAME='#ws+XXXXXXX'
-export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'
+export HROBOT_PASSWORD='YYYYYY'
 ```
 
 ```hcl
 # This is not recommended in production
 provider "hrobot" {
   username = "#ws+XXXXXXX"
-  password = "XXXXXX-YYYYYY-ZZZZZ"
+  password = "YYYYYY"
 }
 ```
 

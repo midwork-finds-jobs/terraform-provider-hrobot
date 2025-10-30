@@ -32,7 +32,7 @@ The code should read the needed API credentials from these env to authenticate
 into the API:
 
 ```sh
-export HROBOT_USERNAME='#ws+XXXXXXX' HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'
+export HROBOT_USERNAME='#ws+XXXXXXX' HROBOT_PASSWORD='YYYYYY'
 ```
 
 ## Commands
