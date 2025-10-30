@@ -304,3 +304,37 @@ type Reset struct {
 	Type            []ResetType `json:"type"`
 	OperatingStatus string      `json:"operating_status,omitempty"`
 }
+
+// UnmarshalJSON implements custom unmarshaling for Reset to handle both
+// string and array formats for the Type field.
+// GET /reset/{id} returns an array: {"type": ["hw", "sw", "power"]}
+// POST /reset/{id} returns a string: {"type": "hw"}.
+func (r *Reset) UnmarshalJSON(data []byte) error {
+	type Alias Reset
+	aux := &struct {
+		Type json.RawMessage `json:"type"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Try to unmarshal as array first
+	var typeArray []ResetType
+	if err := json.Unmarshal(aux.Type, &typeArray); err == nil {
+		r.Type = typeArray
+		return nil
+	}
+
+	// If that fails, try to unmarshal as string
+	var typeString ResetType
+	if err := json.Unmarshal(aux.Type, &typeString); err == nil {
+		r.Type = []ResetType{typeString}
+		return nil
+	}
+
+	return fmt.Errorf("type field must be either string or array")
+}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -70,7 +71,7 @@ Example usage:
 	switch command {
 	case "server":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s server <subcommand>\nSubcommands:\n  list        - List all servers\n  get <id>    - Get server details by ID", os.Args[0])
+			return fmt.Errorf("usage: %s server <subcommand>\nSubcommands:\n  list                                         - List all servers\n  describe <id>                                - Describe server details by ID\n  reboot <id>                                  - Reboot server (hardware reset)\n  shutdown <id> [--order-manual-power-cycle-from-technician]\n                                               - Shutdown server (long power press or order manual reset)\n  poweron <id>                                 - Power on server\n  poweroff <id>                                - Power off server\n  enable-rescue <id> [os]                      - Enable rescue system (default: linux)\n  disable-rescue <id>                          - Disable rescue system", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
@@ -78,9 +79,13 @@ Example usage:
 		case "list":
 			return enhanceAuthError(listServers(ctx, client))
 
-		case "get":
-			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s server get <server-id>", os.Args[0])
+		case "describe":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server describe <server-id>\n\n", os.Args[0])
+				fmt.Println("Describe detailed information about a specific server.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>    The server number to describe")
+				return nil
 			}
 			serverIDStr := os.Args[3]
 			serverID, err := strconv.Atoi(serverIDStr)
@@ -89,20 +94,132 @@ Example usage:
 			}
 			return enhanceAuthError(getServer(ctx, client, hrobot.ServerID(serverID)))
 
+		case "reboot":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server reboot <server-id>\n\n", os.Args[0])
+				fmt.Println("Reboot a server using hardware reset.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>    The server number to reboot")
+				return nil
+			}
+			serverIDStr := os.Args[3]
+			serverID, err := strconv.Atoi(serverIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			}
+			// Reboot is an alias for hardware reset
+			return enhanceAuthError(executeReset(ctx, client, hrobot.ServerID(serverID), "hw"))
+
+		case "shutdown":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server shutdown <server-id> [--order-manual-power-cycle-from-technician]\n\n", os.Args[0])
+				fmt.Println("Shutdown a server using long power button press.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>                                  The server number to shutdown")
+				fmt.Println("\nFlags:")
+				fmt.Println("  --order-manual-power-cycle-from-technician   Order manual power cycle from datacenter technician")
+				return nil
+			}
+			serverIDStr := os.Args[3]
+			serverID, err := strconv.Atoi(serverIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			}
+			// Check if manual power cycle flag is present
+			manualPowerCycle := false
+			for _, arg := range os.Args[4:] {
+				if arg == "--order-manual-power-cycle-from-technician" {
+					manualPowerCycle = true
+					break
+				}
+			}
+			// If manual flag is set, use 'man' reset type, otherwise use 'power_long'
+			resetType := "power_long"
+			if manualPowerCycle {
+				resetType = "man"
+			}
+			return enhanceAuthError(executeReset(ctx, client, hrobot.ServerID(serverID), resetType))
+
+		case "poweron":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server poweron <server-id>\n\n", os.Args[0])
+				fmt.Println("Power on a server.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>    The server number to power on")
+				return nil
+			}
+			serverIDStr := os.Args[3]
+			serverID, err := strconv.Atoi(serverIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			}
+			return enhanceAuthError(powerOnServer(ctx, client, hrobot.ServerID(serverID)))
+
+		case "poweroff":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server poweroff <server-id>\n\n", os.Args[0])
+				fmt.Println("Power off a server.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>    The server number to power off")
+				return nil
+			}
+			serverIDStr := os.Args[3]
+			serverID, err := strconv.Atoi(serverIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			}
+			return enhanceAuthError(powerOffServer(ctx, client, hrobot.ServerID(serverID)))
+
+		case "enable-rescue":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server enable-rescue <server-id> [os]\n\n", os.Args[0])
+				fmt.Println("Enable rescue system for a server.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>    The server number")
+				fmt.Println("  [os]           OS type for rescue system (default: linux, options: linux, vkvm)")
+				return nil
+			}
+			serverIDStr := os.Args[3]
+			serverID, err := strconv.Atoi(serverIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			}
+			// Default to 'linux' if os parameter is not provided
+			osType := "linux"
+			if len(os.Args) > 4 {
+				osType = os.Args[4]
+			}
+			return enhanceAuthError(activateRescue(ctx, client, hrobot.ServerID(serverID), osType))
+
+		case "disable-rescue":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s server disable-rescue <server-id>\n\n", os.Args[0])
+				fmt.Println("Disable rescue system for a server.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <server-id>    The server number")
+				return nil
+			}
+			serverIDStr := os.Args[3]
+			serverID, err := strconv.Atoi(serverIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			}
+			return enhanceAuthError(deactivateRescue(ctx, client, hrobot.ServerID(serverID)))
+
 		default:
-			return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list        - List all servers\n  get <id>    - Get server details by ID", subcommand)
+			return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list                                         - List all servers\n  describe <id>                                - Describe server details by ID\n  reboot <id>                                  - Reboot server (hardware reset)\n  shutdown <id> [--order-manual-power-cycle-from-technician]\n                                               - Shutdown server (long power press or order manual reset)\n  poweron <id>                                 - Power on server\n  poweroff <id>                                - Power off server\n  enable-rescue <id> [os]                      - Enable rescue system (default: linux)\n  disable-rescue <id>                          - Disable rescue system", subcommand)
 		}
 
 	case "firewall":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s firewall <subcommand>\nSubcommands:\n  get <server-id>           - Get firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", os.Args[0])
+			return fmt.Errorf("usage: %s firewall <subcommand>\nSubcommands:\n  describe <server-id>           - Describe firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
 		switch subcommand {
-		case "get":
+		case "describe":
 			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s firewall get <server-id>", os.Args[0])
+				return fmt.Errorf("usage: %s firewall describe <server-id>", os.Args[0])
 			}
 			serverIDStr := os.Args[3]
 			serverID, err := strconv.Atoi(serverIDStr)
@@ -124,53 +241,19 @@ Example usage:
 			return enhanceAuthError(allowIP(ctx, client, hrobot.ServerID(serverID), ipAddr))
 
 		default:
-			return fmt.Errorf("unknown firewall subcommand: %s\nSubcommands:\n  get <server-id>           - Get firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", subcommand)
-		}
-
-	case "reset":
-		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s reset <subcommand>\nSubcommands:\n  get <server-id>           - Get reset options\n  execute <server-id> <type> - Execute reset (types: sw, hw, power, man)", os.Args[0])
-		}
-
-		subcommand := os.Args[2]
-		switch subcommand {
-		case "get":
-			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s reset get <server-id>", os.Args[0])
-			}
-			serverIDStr := os.Args[3]
-			serverID, err := strconv.Atoi(serverIDStr)
-			if err != nil {
-				return fmt.Errorf("invalid server ID: %s", serverIDStr)
-			}
-			return enhanceAuthError(getResetOptions(ctx, client, hrobot.ServerID(serverID)))
-
-		case "execute":
-			if len(os.Args) < 5 {
-				return fmt.Errorf("usage: %s reset execute <server-id> <type>\nTypes: sw (software), hw (hardware), power (power cycle), man (manual)", os.Args[0])
-			}
-			serverIDStr := os.Args[3]
-			serverID, err := strconv.Atoi(serverIDStr)
-			if err != nil {
-				return fmt.Errorf("invalid server ID: %s", serverIDStr)
-			}
-			resetType := os.Args[4]
-			return enhanceAuthError(executeReset(ctx, client, hrobot.ServerID(serverID), resetType))
-
-		default:
-			return fmt.Errorf("unknown reset subcommand: %s\nSubcommands:\n  get <server-id>           - Get reset options\n  execute <server-id> <type> - Execute reset (types: sw, hw, power, man)", subcommand)
+			return fmt.Errorf("unknown firewall subcommand: %s\nSubcommands:\n  describe <server-id>           - Describe firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", subcommand)
 		}
 
 	case "boot":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s boot <subcommand>\nSubcommands:\n  get <server-id>                        - Get boot configuration\n  rescue enable <server-id> [os]         - Activate rescue system (default: linux)\n  rescue disable <server-id>             - Deactivate rescue system", os.Args[0])
+			return fmt.Errorf("usage: %s boot <subcommand>\nSubcommands:\n  describe <server-id>  - Describe boot configuration", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
 		switch subcommand {
-		case "get":
+		case "describe":
 			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s boot get <server-id>", os.Args[0])
+				return fmt.Errorf("usage: %s boot describe <server-id>", os.Args[0])
 			}
 			serverIDStr := os.Args[3]
 			serverID, err := strconv.Atoi(serverIDStr)
@@ -179,51 +262,13 @@ Example usage:
 			}
 			return enhanceAuthError(getBootConfig(ctx, client, hrobot.ServerID(serverID)))
 
-		case "rescue":
-			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s boot rescue <enable|disable> ...\nSubcommands:\n  rescue enable <server-id> [os]   - Activate rescue system (default: linux)\n  rescue disable <server-id>       - Deactivate rescue system", os.Args[0])
-			}
-
-			action := os.Args[3]
-			switch action {
-			case "enable":
-				if len(os.Args) < 5 {
-					return fmt.Errorf("usage: %s boot rescue enable <server-id> [os]", os.Args[0])
-				}
-				serverIDStr := os.Args[4]
-				serverID, err := strconv.Atoi(serverIDStr)
-				if err != nil {
-					return fmt.Errorf("invalid server ID: %s", serverIDStr)
-				}
-				// Default to 'linux' if os parameter is not provided
-				osType := "linux"
-				if len(os.Args) > 5 {
-					osType = os.Args[5]
-				}
-				return enhanceAuthError(activateRescue(ctx, client, hrobot.ServerID(serverID), osType))
-
-			case "disable":
-				if len(os.Args) < 5 {
-					return fmt.Errorf("usage: %s boot rescue disable <server-id>", os.Args[0])
-				}
-				serverIDStr := os.Args[4]
-				serverID, err := strconv.Atoi(serverIDStr)
-				if err != nil {
-					return fmt.Errorf("invalid server ID: %s", serverIDStr)
-				}
-				return enhanceAuthError(deactivateRescue(ctx, client, hrobot.ServerID(serverID)))
-
-			default:
-				return fmt.Errorf("unknown rescue action: %s\nSubcommands:\n  rescue enable <server-id> [os]   - Activate rescue system (default: linux)\n  rescue disable <server-id>       - Deactivate rescue system", action)
-			}
-
 		default:
-			return fmt.Errorf("unknown boot subcommand: %s\nSubcommands:\n  get <server-id>                        - Get boot configuration\n  rescue enable <server-id> [os]         - Activate rescue system (default: linux)\n  rescue disable <server-id>             - Deactivate rescue system", subcommand)
+			return fmt.Errorf("unknown boot subcommand: %s\nSubcommands:\n  describe <server-id>  - Describe boot configuration", subcommand)
 		}
 
-	case "key":
+	case "ssh-key":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s key <subcommand>\nSubcommands:\n  list                          - List all SSH keys\n  get <fingerprint>             - Get SSH key details\n  create <name> <key-data>      - Create a new SSH key\n  rename <fingerprint> <name>   - Rename an SSH key\n  delete <fingerprint>          - Delete an SSH key", os.Args[0])
+			return fmt.Errorf("usage: %s ssh-key <subcommand>\nSubcommands:\n  list                     - List all SSH keys\n  describe <name>               - Describe SSH key details\n  create <name> <file|->   - Create a new SSH key from file or stdin\n  rename <name> <new-name> - Rename an SSH key\n  delete <name>            - Delete an SSH key", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
@@ -231,80 +276,92 @@ Example usage:
 		case "list":
 			return enhanceAuthError(listKeys(ctx, client))
 
-		case "get":
-			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s key get <fingerprint>", os.Args[0])
-			}
-			fingerprint := os.Args[3]
-			return enhanceAuthError(getKey(ctx, client, fingerprint))
-
-		case "create":
-			if len(os.Args) < 5 {
-				return fmt.Errorf("usage: %s key create <name> <key-data>", os.Args[0])
+		case "describe":
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s ssh-key describe <name>\n\n", os.Args[0])
+				fmt.Println("Describe detailed information about a specific SSH key.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <name>    The name of the SSH key to describe")
+				return nil
 			}
 			name := os.Args[3]
-			keyData := strings.Join(os.Args[4:], " ")
-			return enhanceAuthError(createKey(ctx, client, name, keyData))
+			return enhanceAuthError(getKey(ctx, client, name))
+
+		case "create":
+			if isHelpRequested() || len(os.Args) < 5 {
+				fmt.Printf("Usage: %s ssh-key create <name> <file|->\n\n", os.Args[0])
+				fmt.Println("Create a new SSH key from a file or stdin.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <name>      The name for the new SSH key")
+				fmt.Println("  <file|->    Path to the public key file, or '-' to read from stdin")
+				return nil
+			}
+			name := os.Args[3]
+			keyPath := os.Args[4]
+			return enhanceAuthError(createKey(ctx, client, name, keyPath))
 
 		case "rename":
-			if len(os.Args) < 5 {
-				return fmt.Errorf("usage: %s key rename <fingerprint> <new-name>", os.Args[0])
+			if isHelpRequested() || len(os.Args) < 5 {
+				fmt.Printf("Usage: %s ssh-key rename <name> <new-name>\n\n", os.Args[0])
+				fmt.Println("Rename an existing SSH key.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <name>        The current name of the SSH key")
+				fmt.Println("  <new-name>    The new name for the SSH key")
+				return nil
 			}
-			fingerprint := os.Args[3]
+			name := os.Args[3]
 			newName := os.Args[4]
-			return enhanceAuthError(renameKey(ctx, client, fingerprint, newName))
+			return enhanceAuthError(renameKey(ctx, client, name, newName))
 
 		case "delete":
-			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s key delete <fingerprint>", os.Args[0])
+			if isHelpRequested() || len(os.Args) < 4 {
+				fmt.Printf("Usage: %s ssh-key delete <name>\n\n", os.Args[0])
+				fmt.Println("Delete an SSH key.")
+				fmt.Println("\nArguments:")
+				fmt.Println("  <name>    The name of the SSH key to delete")
+				return nil
 			}
-			fingerprint := os.Args[3]
-			return enhanceAuthError(deleteKey(ctx, client, fingerprint))
+			name := os.Args[3]
+			return enhanceAuthError(deleteKey(ctx, client, name))
 
 		default:
-			return fmt.Errorf("unknown key subcommand: %s\nSubcommands:\n  list                          - List all SSH keys\n  get <fingerprint>             - Get SSH key details\n  create <name> <key-data>      - Create a new SSH key\n  rename <fingerprint> <name>   - Rename an SSH key\n  delete <fingerprint>          - Delete an SSH key", subcommand)
+			return fmt.Errorf("unknown ssh-key subcommand: %s\nSubcommands:\n  list                     - List all SSH keys\n  describe <name>               - Describe SSH key details\n  create <name> <file|->   - Create a new SSH key from file or stdin\n  rename <name> <new-name> - Rename an SSH key\n  delete <name>            - Delete an SSH key", subcommand)
 		}
 
 	case "auction":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s auction <subcommand>\nSubcommands:\n  list    - List available auction servers", os.Args[0])
+			return fmt.Errorf("usage: %s auction <subcommand>\nSubcommands:\n  list                                            - List available auction servers\n  purchase <product-id> <ssh-key-name> [--test]  - Purchase a server from auction", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
 		switch subcommand {
 		case "list":
-			return enhanceAuthError(listAuctionServers(ctx, client))
+			return enhanceOrderingAuthError(ctx, client, listAuctionServers(ctx, client))
 
-		default:
-			return fmt.Errorf("unknown auction subcommand: %s\nSubcommands:\n  list    - List available auction servers", subcommand)
-		}
-
-	case "order":
-		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s order <subcommand>\nSubcommands:\n  market <product-id> <ssh-key-fingerprint> [--test]  - Order a server from marketplace", os.Args[0])
-		}
-
-		subcommand := os.Args[2]
-		switch subcommand {
-		case "market":
+		case "purchase":
 			if len(os.Args) < 5 {
-				return fmt.Errorf("usage: %s order market <product-id> <ssh-key-fingerprint> [--test]", os.Args[0])
+				return fmt.Errorf("usage: %s auction purchase <product-id> <ssh-key-name> [--test]", os.Args[0])
 			}
 			productID, err := strconv.ParseUint(os.Args[3], 10, 32)
 			if err != nil {
 				return fmt.Errorf("invalid product ID: %s", os.Args[3])
 			}
-			sshKeyFingerprint := os.Args[4]
+			sshKeyName := os.Args[4]
+			// Look up the fingerprint by name
+			sshKeyFingerprint, err := findKeyFingerprintByName(ctx, client, sshKeyName)
+			if err != nil {
+				return enhanceAuthError(err)
+			}
 			testMode := len(os.Args) > 5 && os.Args[5] == "--test"
-			return enhanceAuthError(orderMarketServer(ctx, client, uint32(productID), sshKeyFingerprint, testMode))
+			return enhanceOrderingAuthError(ctx, client, orderMarketServer(ctx, client, uint32(productID), sshKeyFingerprint, testMode))
 
 		default:
-			return fmt.Errorf("unknown order subcommand: %s\nSubcommands:\n  market <product-id> <ssh-key-fingerprint> [--test]  - Order a server from marketplace", subcommand)
+			return fmt.Errorf("unknown auction subcommand: %s\nSubcommands:\n  list                                            - List available auction servers\n  purchase <product-id> <ssh-key-name> [--test]  - Purchase a server from auction", subcommand)
 		}
 
 	case "rdns":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s rdns <subcommand>\nSubcommands:\n  list [server-ip] - List all reverse DNS entries\n  get <ip>         - Get reverse DNS entry for an IP\n  set <ip> <ptr>   - Set reverse DNS entry for an IP\n  delete <ip>      - Delete reverse DNS entry for an IP", os.Args[0])
+			return fmt.Errorf("usage: %s rdns <subcommand>\nSubcommands:\n  list [server-ip] - List all reverse DNS entries\n  describe <ip>         - Describe reverse DNS entry for an IP\n  set <ip> <ptr>   - Set reverse DNS entry for an IP\n  reset <ip>       - Reset reverse DNS entry for an IP", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
@@ -316,9 +373,9 @@ Example usage:
 			}
 			return enhanceAuthError(listRDNS(ctx, client, serverIP))
 
-		case "get":
+		case "describe":
 			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s rdns get <ip>", os.Args[0])
+				return fmt.Errorf("usage: %s rdns describe <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
 			return enhanceAuthError(getRDNS(ctx, client, ip))
@@ -331,20 +388,20 @@ Example usage:
 			ptr := os.Args[4]
 			return enhanceAuthError(setRDNS(ctx, client, ip, ptr))
 
-		case "delete":
+		case "reset":
 			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s rdns delete <ip>", os.Args[0])
+				return fmt.Errorf("usage: %s rdns reset <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
 			return enhanceAuthError(deleteRDNS(ctx, client, ip))
 
 		default:
-			return fmt.Errorf("unknown rdns subcommand: %s\nSubcommands:\n  list [server-ip] - List all reverse DNS entries\n  get <ip>         - Get reverse DNS entry for an IP\n  set <ip> <ptr>   - Set reverse DNS entry for an IP\n  delete <ip>      - Delete reverse DNS entry for an IP", subcommand)
+			return fmt.Errorf("unknown rdns subcommand: %s\nSubcommands:\n  list [server-ip] - List all reverse DNS entries\n  describe <ip>         - Describe reverse DNS entry for an IP\n  set <ip> <ptr>   - Set reverse DNS entry for an IP\n  reset <ip>       - Reset reverse DNS entry for an IP", subcommand)
 		}
 
 	case "failover":
 		if len(os.Args) < 3 {
-			return fmt.Errorf("usage: %s failover <subcommand>\nSubcommands:\n  list            - List all failover IPs\n  get <ip>        - Get failover IP details\n  set <ip> <dst>  - Route failover IP to destination server\n  delete <ip>     - Unroute failover IP", os.Args[0])
+			return fmt.Errorf("usage: %s failover <subcommand>\nSubcommands:\n  list            - List all failover IPs\n  describe <ip>        - Describe failover IP details\n  set <ip> <dst>  - Route failover IP to destination server\n  delete <ip>     - Unroute failover IP", os.Args[0])
 		}
 
 		subcommand := os.Args[2]
@@ -352,9 +409,9 @@ Example usage:
 		case "list":
 			return enhanceAuthError(listFailovers(ctx, client))
 
-		case "get":
+		case "describe":
 			if len(os.Args) < 4 {
-				return fmt.Errorf("usage: %s failover get <ip>", os.Args[0])
+				return fmt.Errorf("usage: %s failover describe <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
 			return enhanceAuthError(getFailover(ctx, client, ip))
@@ -375,13 +432,30 @@ Example usage:
 			return enhanceAuthError(deleteFailover(ctx, client, ip))
 
 		default:
-			return fmt.Errorf("unknown failover subcommand: %s\nSubcommands:\n  list            - List all failover IPs\n  get <ip>        - Get failover IP details\n  set <ip> <dst>  - Route failover IP to destination server\n  delete <ip>     - Unroute failover IP", subcommand)
+			return fmt.Errorf("unknown failover subcommand: %s\nSubcommands:\n  list            - List all failover IPs\n  describe <ip>        - Describe failover IP details\n  set <ip> <dst>  - Route failover IP to destination server\n  delete <ip>     - Unroute failover IP", subcommand)
 		}
 
 	default:
 		printHelp()
 		return fmt.Errorf("unknown command: %s", command)
 	}
+}
+
+// isHelpRequested checks if --help or -h flag is present in arguments.
+func isHelpRequested() bool {
+	for _, arg := range os.Args {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
+// verifyCredentials checks if the credentials are valid by attempting to list SSH keys.
+// Returns true if credentials work, false otherwise.
+func verifyCredentials(ctx context.Context, client *hrobot.Client) bool {
+	_, err := client.Key.List(ctx)
+	return err == nil
 }
 
 // enhanceAuthError checks if an error is an authentication error and adds helpful instructions.
@@ -419,6 +493,37 @@ Example usage:
 	return err
 }
 
+// enhanceOrderingAuthError checks if an error is an authentication error for ordering operations.
+// It verifies if credentials are valid but ordering permission is missing.
+func enhanceOrderingAuthError(ctx context.Context, client *hrobot.Client, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check if this is an unauthorized error
+	var hrobotErr *hrobot.Error
+	if errors.As(err, &hrobotErr) && hrobot.IsUnauthorizedError(hrobotErr) {
+		// Verify if credentials work by testing with SSH keys endpoint
+		if verifyCredentials(ctx, client) {
+			// Credentials work, but ordering is not enabled
+			return fmt.Errorf(`%w
+
+Your credentials are valid, but ordering via the API is not enabled.
+
+To enable ordering via the API:
+  1. Visit: https://robot.hetzner.com/preferences/index
+  2. Go to 'Webservice and app settings' -> 'Ordering'
+  3. Enable 'ordering over the webservice'
+  4. Click 'confirm' to save the setting`, err)
+		}
+
+		// Credentials don't work at all, show full authentication error
+		return enhanceAuthError(err)
+	}
+
+	return err
+}
+
 func printHelp() {
 	fmt.Printf(`hrobot - Command-line tool for Hetzner Robot API
 
@@ -430,66 +535,48 @@ Available Commands:
 
   Server Commands:
     server list                              List all servers
-    server get <id>                          Get server details by ID
+    server describe <id>                     Describe server details by ID
+    server reboot <id>                       Reboot server (hardware reset)
+    server shutdown <id> [--order-manual-power-cycle-from-technician]
+                                             Shutdown server (long power press or order manual reset)
+    server poweron <id>                      Power on server
+    server poweroff <id>                     Power off server
+    server enable-rescue <id> [os]           Enable rescue system (default: linux, options: linux, vkvm)
+    server disable-rescue <id>               Disable rescue system
 
   Firewall Commands:
-    firewall get <server-id>                 Get firewall configuration
+    firewall describe <server-id>            Describe firewall configuration
     firewall allow <server-id> <ip>          Add IP to firewall allow list
 
-  Reset Commands:
-    reset get <server-id>                    Get reset options for server
-    reset execute <server-id> <type>         Execute reset (sw/hw/power/man)
-
   Boot Configuration Commands:
-    boot get <server-id>                     Get boot configuration
-    boot rescue enable <server-id> [os]      Activate rescue system (default: linux, options: linux, vkvm)
-    boot rescue disable <server-id>          Deactivate rescue system
+    boot describe <server-id>                Describe boot configuration
 
   SSH Key Commands:
-    key list                                 List all SSH keys
-    key get <fingerprint>                    Get SSH key details
-    key create <name> <key-data>             Create a new SSH key
-    key rename <fingerprint> <new-name>      Rename an SSH key
-    key delete <fingerprint>                 Delete an SSH key
+    ssh-key list                             List all SSH keys
+    ssh-key describe <name>                  Describe SSH key details
+    ssh-key create <name> <file|->           Create a new SSH key from file or stdin
+    ssh-key rename <name> <new-name>         Rename an SSH key
+    ssh-key delete <name>                    Delete an SSH key
 
   Auction Commands:
     auction list                             List available auction servers
-
-  Order Commands:
-    order market <product-id> <ssh-key-fingerprint> [--test]
-                                             Order a server from marketplace
+    auction purchase <server-id> <ssh-key>   Purchase a server from auction
 
   Reverse DNS Commands:
     rdns list [server-ip]                    List all reverse DNS entries (optionally filtered by server IP)
-    rdns get <ip>                            Get reverse DNS entry for an IP
+    rdns describe <ip>                       Describe reverse DNS entry for an IP
     rdns set <ip> <ptr>                      Set reverse DNS entry for an IP
-    rdns delete <ip>                         Delete reverse DNS entry for an IP
+    rdns reset <ip>                          Use default Hetzner reverse DNS entry for an IP
 
   Failover IP Commands:
     failover list                            List all failover IPs
-    failover get <ip>                        Get failover IP details
+    failover describe <ip>                   Describe failover IP details
     failover set <ip> <destination-ip>       Route failover IP to destination server
     failover delete <ip>                     Unroute failover IP
 
 Environment Variables:
   HROBOT_USERNAME                            Your Hetzner Robot username (e.g., #ws+XXXXX)
   HROBOT_PASSWORD                            Your Hetzner Robot password
-
-Examples:
-  # List all servers
-  hrobot server list
-
-  # Get details for a specific server
-  hrobot server get 1234567
-
-  # List SSH keys
-  hrobot key list
-
-  # View firewall configuration
-  hrobot firewall get 1234567
-
-  # List available auction servers
-  hrobot auction list
 
 `)
 }
@@ -500,17 +587,30 @@ func getServer(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		return fmt.Errorf("failed to get server: %w", err)
 	}
 
+	// Get reset info to retrieve operating status
+	reset, err := client.Reset.Get(ctx, serverID)
+	var operatingStatus string
+	if err != nil {
+		operatingStatus = "(unavailable)"
+	} else {
+		operatingStatus = reset.OperatingStatus
+		if operatingStatus == "" {
+			operatingStatus = "ready"
+		}
+	}
+
 	// Pretty print the server details
 	fmt.Printf("Server Details:\n")
-	fmt.Printf("  Server Number: %d\n", server.ServerNumber)
-	fmt.Printf("  Server Name:   %s\n", server.ServerName)
-	fmt.Printf("  Server IP:     %s\n", server.ServerIP.String())
-	fmt.Printf("  Product:       %s\n", server.Product)
-	fmt.Printf("  DC:            %s\n", server.DC)
-	fmt.Printf("  Status:        %s\n", server.Status)
-	fmt.Printf("  Traffic:       %s\n", server.Traffic.String())
-	fmt.Printf("  Cancelled:     %v\n", server.Cancelled)
-	fmt.Printf("  Paid Until:    %s\n", server.PaidUntil)
+	fmt.Printf("  Server Number:     %d\n", server.ServerNumber)
+	fmt.Printf("  Server Name:       %s\n", server.ServerName)
+	fmt.Printf("  Server IP:         %s\n", server.ServerIP.String())
+	fmt.Printf("  Product:           %s\n", server.Product)
+	fmt.Printf("  DC:                %s\n", server.DC)
+	fmt.Printf("  Status:            %s\n", server.Status)
+	fmt.Printf("  Operating Status:  %s\n", operatingStatus)
+	fmt.Printf("  Traffic:           %s\n", server.Traffic.String())
+	fmt.Printf("  Cancelled:         %v\n", server.Cancelled)
+	fmt.Printf("  Paid Until:        %s\n", server.PaidUntil)
 
 	if len(server.IP) > 0 {
 		fmt.Printf("  IP Addresses:\n")
@@ -529,14 +629,6 @@ func getServer(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 			fmt.Printf("    [%d] %s/%s\n", i, subnet.IP.String(), subnet.Mask)
 		}
 	}
-
-	// Also output as JSON for easy parsing
-	fmt.Println("\nJSON Output:")
-	data, err := json.MarshalIndent(server, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-	fmt.Println(string(data))
 
 	return nil
 }
@@ -671,7 +763,8 @@ func listKeys(ctx context.Context, client *hrobot.Client) error {
 
 	fmt.Printf("Found %d SSH key(s):\n\n", len(keys))
 	for i, key := range keys {
-		fmt.Printf("[%d] %s\n", i+1, key.Name)
+		fmt.Printf("[%d]\n", i+1)
+		fmt.Printf("    Name:        %s\n", key.Name)
 		fmt.Printf("    Fingerprint: %s\n", key.Fingerprint)
 		fmt.Printf("    Type:        %s\n", key.Type)
 		fmt.Printf("    Size:        %d bits\n", key.Size)
@@ -681,7 +774,29 @@ func listKeys(ctx context.Context, client *hrobot.Client) error {
 	return nil
 }
 
-func getKey(ctx context.Context, client *hrobot.Client, fingerprint string) error {
+// findKeyFingerprintByName looks up a key by name and returns its fingerprint.
+func findKeyFingerprintByName(ctx context.Context, client *hrobot.Client, name string) (string, error) {
+	keys, err := client.Key.List(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to list SSH keys: %w", err)
+	}
+
+	for _, key := range keys {
+		if key.Name == name {
+			return key.Fingerprint, nil
+		}
+	}
+
+	return "", fmt.Errorf("SSH key with name '%s' not found", name)
+}
+
+func getKey(ctx context.Context, client *hrobot.Client, name string) error {
+	// Look up the fingerprint by name
+	fingerprint, err := findKeyFingerprintByName(ctx, client, name)
+	if err != nil {
+		return err
+	}
+
 	key, err := client.Key.Get(ctx, fingerprint)
 	if err != nil {
 		return fmt.Errorf("failed to get SSH key: %w", err)
@@ -706,7 +821,25 @@ func getKey(ctx context.Context, client *hrobot.Client, fingerprint string) erro
 	return nil
 }
 
-func createKey(ctx context.Context, client *hrobot.Client, name, keyData string) error {
+func createKey(ctx context.Context, client *hrobot.Client, name, keyPath string) error {
+	var keyData string
+
+	// Check if reading from stdin
+	if keyPath == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		keyData = strings.TrimSpace(string(data))
+	} else {
+		// keyPath must be a valid file path
+		data, err := os.ReadFile(keyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read key file '%s': %w (use '-' to read from stdin)", keyPath, err)
+		}
+		keyData = strings.TrimSpace(string(data))
+	}
+
 	key, err := client.Key.Create(ctx, name, keyData)
 	if err != nil {
 		return fmt.Errorf("failed to create SSH key: %w", err)
@@ -721,26 +854,39 @@ func createKey(ctx context.Context, client *hrobot.Client, name, keyData string)
 	return nil
 }
 
-func renameKey(ctx context.Context, client *hrobot.Client, fingerprint, newName string) error {
+func renameKey(ctx context.Context, client *hrobot.Client, name, newName string) error {
+	// Look up the fingerprint by name
+	fingerprint, err := findKeyFingerprintByName(ctx, client, name)
+	if err != nil {
+		return err
+	}
+
 	key, err := client.Key.Rename(ctx, fingerprint, newName)
 	if err != nil {
 		return fmt.Errorf("failed to rename SSH key: %w", err)
 	}
 
 	fmt.Printf("✓ Successfully renamed SSH key\n")
-	fmt.Printf("  Fingerprint: %s\n", key.Fingerprint)
+	fmt.Printf("  Old Name:    %s\n", name)
 	fmt.Printf("  New Name:    %s\n", key.Name)
+	fmt.Printf("  Fingerprint: %s\n", key.Fingerprint)
 
 	return nil
 }
 
-func deleteKey(ctx context.Context, client *hrobot.Client, fingerprint string) error {
-	err := client.Key.Delete(ctx, fingerprint)
+func deleteKey(ctx context.Context, client *hrobot.Client, name string) error {
+	// Look up the fingerprint by name
+	fingerprint, err := findKeyFingerprintByName(ctx, client, name)
+	if err != nil {
+		return err
+	}
+
+	err = client.Key.Delete(ctx, fingerprint)
 	if err != nil {
 		return fmt.Errorf("failed to delete SSH key: %w", err)
 	}
 
-	fmt.Printf("✓ Successfully deleted SSH key %s\n", fingerprint)
+	fmt.Printf("✓ Successfully deleted SSH key '%s' (fingerprint: %s)\n", name, fingerprint)
 
 	return nil
 }
@@ -964,7 +1110,7 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 		return fmt.Errorf("failed to get boot configuration: %w", err)
 	}
 
-	// Get server number from any available config
+	// Describe server number from any available config
 	var serverNumber int
 	var serverIP string
 	if config.Rescue != nil {
@@ -1097,48 +1243,19 @@ func deactivateRescue(ctx context.Context, client *hrobot.Client, serverID hrobo
 	return nil
 }
 
-func getResetOptions(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
-	reset, err := client.Reset.Get(ctx, serverID)
-	if err != nil {
-		return fmt.Errorf("failed to get reset options: %w", err)
-	}
-
-	fmt.Printf("Reset Options for Server #%d:\n", reset.ServerNumber)
-	fmt.Printf("  Server IP:        %s\n", reset.ServerIP.String())
-	fmt.Printf("  Available Types:  %s\n", reset.Type)
-	if reset.OperatingStatus != "" {
-		fmt.Printf("  Operating Status: %s\n", reset.OperatingStatus)
-	}
-
-	fmt.Println("\nAvailable Reset Types:")
-	fmt.Println("  sw    - Software reset (CTRL+ALT+DEL)")
-	fmt.Println("  hw    - Hardware reset (reset button)")
-	fmt.Println("  power - Power cycle (short press power button)")
-	fmt.Println("  man   - Manual reset")
-
-	// Also output as JSON for easy parsing
-	fmt.Println("\nJSON Output:")
-	data, err := json.MarshalIndent(reset, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-	fmt.Println(string(data))
-
-	return nil
-}
-
 func executeReset(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, resetType string) error {
 	// Validate reset type
 	validTypes := map[string]string{
-		"sw":    "software reset (CTRL+ALT+DEL)",
-		"hw":    "hardware reset (reset button)",
-		"power": "power cycle",
-		"man":   "manual reset",
+		"sw":         "software reset (CTRL+ALT+DEL)",
+		"hw":         "hardware reset (reset button)",
+		"power":      "power cycle",
+		"power_long": "shutdown (long power button press)",
+		"man":        "manual reset",
 	}
 
 	description, valid := validTypes[resetType]
 	if !valid {
-		return fmt.Errorf("invalid reset type: %s\nValid types: sw, hw, power, man", resetType)
+		return fmt.Errorf("invalid reset type: %s\nValid types: sw, hw, power, power_long, man", resetType)
 	}
 
 	fmt.Printf("Executing %s on server #%d...\n", description, serverID)
@@ -1151,6 +1268,70 @@ func executeReset(ctx context.Context, client *hrobot.Client, serverID hrobot.Se
 	fmt.Printf("✓ Reset executed successfully!\n")
 	fmt.Printf("  Server IP: %s\n", reset.ServerIP.String())
 	fmt.Printf("  Type:      %s\n", reset.Type)
+
+	return nil
+}
+
+func powerOnServer(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
+	// Get reset options to check operating status
+	reset, err := client.Reset.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get server status: %w", err)
+	}
+
+	// Check if server is already powered on
+	status := strings.ToLower(reset.OperatingStatus)
+	if status == "ready" || status == "running" || status == "" {
+		fmt.Printf("Server #%d is already powered on\n", serverID)
+		fmt.Printf("  Server IP:        %s\n", reset.ServerIP.String())
+		fmt.Printf("  Operating Status: %s\n", reset.OperatingStatus)
+		return nil
+	}
+
+	// Server is powered off, send power command to turn it on
+	fmt.Printf("Powering on server #%d...\n", serverID)
+	fmt.Printf("  Current status: %s\n\n", reset.OperatingStatus)
+
+	resetResult, err := client.Reset.Execute(ctx, serverID, hrobot.ResetTypePower)
+	if err != nil {
+		return fmt.Errorf("failed to power on server: %w", err)
+	}
+
+	fmt.Printf("✓ Power command sent successfully!\n")
+	fmt.Printf("  Server IP: %s\n", resetResult.ServerIP.String())
+	fmt.Printf("  Type:      %s\n", resetResult.Type)
+
+	return nil
+}
+
+func powerOffServer(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
+	// Get reset options to check operating status
+	reset, err := client.Reset.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get server status: %w", err)
+	}
+
+	// Check if server is already powered off
+	status := strings.ToLower(reset.OperatingStatus)
+	if status == "off" || status == "powered off" || status == "shutdown" {
+		fmt.Printf("Server #%d is already powered off\n", serverID)
+		fmt.Printf("  Server IP:        %s\n", reset.ServerIP.String())
+		fmt.Printf("  Operating Status: %s\n", reset.OperatingStatus)
+		return nil
+	}
+
+	// Server is powered on, send power command to turn it off
+	fmt.Printf("Powering off server #%d...\n", serverID)
+	fmt.Printf("  Current status: %s\n\n", reset.OperatingStatus)
+
+	resetResult, err := client.Reset.Execute(ctx, serverID, hrobot.ResetTypePower)
+	if err != nil {
+		return fmt.Errorf("failed to power off server: %w", err)
+	}
+
+	fmt.Printf("✓ Power command sent successfully!\n")
+	fmt.Printf("  Server IP: %s\n", resetResult.ServerIP.String())
+	fmt.Printf("  Type:      %s\n", resetResult.Type)
 
 	return nil
 }
