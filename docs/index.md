@@ -27,7 +27,7 @@ terraform {
   }
 }
 
-# Credentials: https://robot.hetzner.com/preferences/index
+# Credentials: https://robot.hetzner.com/preferences/index
 # NOTE: To purchase servers you need to opt-in:
 # Ordering -> ordering over the webservice -> Agree
 

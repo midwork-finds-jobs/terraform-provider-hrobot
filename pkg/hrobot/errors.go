@@ -75,6 +75,7 @@ type ErrorCode string
 
 const (
 	// Common errors.
+	ErrUnauthorized            ErrorCode = "UNAUTHORIZED"
 	ErrInvalidInput            ErrorCode = "INVALID_INPUT"
 	ErrInvalidInputServerIP    ErrorCode = "INVALID_INPUT_SERVER_IP"
 	ErrInvalidInputIPAddress   ErrorCode = "INVALID_INPUT_IP_ADDRESS"
@@ -178,4 +179,9 @@ func IsNotFoundError(err error) bool {
 // IsFirewallInProcessError checks if the error is a firewall in process error.
 func IsFirewallInProcessError(err error) bool {
 	return IsAPIError(err, ErrFirewallInProcess)
+}
+
+// IsUnauthorizedError checks if the error is an unauthorized error.
+func IsUnauthorizedError(err error) bool {
+	return IsAPIError(err, ErrUnauthorized)
 }

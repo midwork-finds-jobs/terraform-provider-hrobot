@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -41,7 +42,25 @@ func run() error {
 	password := os.Getenv("HROBOT_PASSWORD")
 
 	if username == "" || password == "" {
-		return fmt.Errorf("HROBOT_USERNAME and HROBOT_PASSWORD environment variables must be set")
+		return fmt.Errorf(`HROBOT_USERNAME and HROBOT_PASSWORD environment variables must be set
+
+To get your credentials:
+  1. Visit: https://robot.hetzner.com/preferences/index
+  2. Navigate to the 'Webservice and app settings' section
+  3. Retrieve username and set new password
+
+Note: If you want to order servers via the API, you also need to:
+  1. Go to 'Webservice and app settings' -> 'Ordering'
+  2. Enable 'ordering over the webservice'
+  3. Click 'confirm' to save the setting
+
+To limit API access to certain IP-address:
+  1. Go to 'Webservice and app settings' -> 'Webservice/app access'
+  2. Add your IP and save
+
+Example usage:
+  export HROBOT_USERNAME='#ws+XXXXXXX'
+  export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'`)
 	}
 
 	// Create client
@@ -57,7 +76,7 @@ func run() error {
 		subcommand := os.Args[2]
 		switch subcommand {
 		case "list":
-			return listServers(ctx, client)
+			return enhanceAuthError(listServers(ctx, client))
 
 		case "get":
 			if len(os.Args) < 4 {
@@ -68,7 +87,7 @@ func run() error {
 			if err != nil {
 				return fmt.Errorf("invalid server ID: %s", serverIDStr)
 			}
-			return getServer(ctx, client, hrobot.ServerID(serverID))
+			return enhanceAuthError(getServer(ctx, client, hrobot.ServerID(serverID)))
 
 		default:
 			return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list        - List all servers\n  get <id>    - Get server details by ID", subcommand)
@@ -90,7 +109,7 @@ func run() error {
 			if err != nil {
 				return fmt.Errorf("invalid server ID: %s", serverIDStr)
 			}
-			return getFirewall(ctx, client, hrobot.ServerID(serverID))
+			return enhanceAuthError(getFirewall(ctx, client, hrobot.ServerID(serverID)))
 
 		case "allow":
 			if len(os.Args) < 5 {
@@ -102,7 +121,7 @@ func run() error {
 				return fmt.Errorf("invalid server ID: %s", serverIDStr)
 			}
 			ipAddr := os.Args[4]
-			return allowIP(ctx, client, hrobot.ServerID(serverID), ipAddr)
+			return enhanceAuthError(allowIP(ctx, client, hrobot.ServerID(serverID), ipAddr))
 
 		default:
 			return fmt.Errorf("unknown firewall subcommand: %s\nSubcommands:\n  get <server-id>           - Get firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", subcommand)
@@ -124,7 +143,7 @@ func run() error {
 			if err != nil {
 				return fmt.Errorf("invalid server ID: %s", serverIDStr)
 			}
-			return getResetOptions(ctx, client, hrobot.ServerID(serverID))
+			return enhanceAuthError(getResetOptions(ctx, client, hrobot.ServerID(serverID)))
 
 		case "execute":
 			if len(os.Args) < 5 {
@@ -136,7 +155,7 @@ func run() error {
 				return fmt.Errorf("invalid server ID: %s", serverIDStr)
 			}
 			resetType := os.Args[4]
-			return executeReset(ctx, client, hrobot.ServerID(serverID), resetType)
+			return enhanceAuthError(executeReset(ctx, client, hrobot.ServerID(serverID), resetType))
 
 		default:
 			return fmt.Errorf("unknown reset subcommand: %s\nSubcommands:\n  get <server-id>           - Get reset options\n  execute <server-id> <type> - Execute reset (types: sw, hw, power, man)", subcommand)
@@ -158,7 +177,7 @@ func run() error {
 			if err != nil {
 				return fmt.Errorf("invalid server ID: %s", serverIDStr)
 			}
-			return getBootConfig(ctx, client, hrobot.ServerID(serverID))
+			return enhanceAuthError(getBootConfig(ctx, client, hrobot.ServerID(serverID)))
 
 		case "rescue":
 			if len(os.Args) < 4 {
@@ -181,7 +200,7 @@ func run() error {
 				if len(os.Args) > 5 {
 					osType = os.Args[5]
 				}
-				return activateRescue(ctx, client, hrobot.ServerID(serverID), osType)
+				return enhanceAuthError(activateRescue(ctx, client, hrobot.ServerID(serverID), osType))
 
 			case "disable":
 				if len(os.Args) < 5 {
@@ -192,7 +211,7 @@ func run() error {
 				if err != nil {
 					return fmt.Errorf("invalid server ID: %s", serverIDStr)
 				}
-				return deactivateRescue(ctx, client, hrobot.ServerID(serverID))
+				return enhanceAuthError(deactivateRescue(ctx, client, hrobot.ServerID(serverID)))
 
 			default:
 				return fmt.Errorf("unknown rescue action: %s\nSubcommands:\n  rescue enable <server-id> [os]   - Activate rescue system (default: linux)\n  rescue disable <server-id>       - Deactivate rescue system", action)
@@ -210,14 +229,14 @@ func run() error {
 		subcommand := os.Args[2]
 		switch subcommand {
 		case "list":
-			return listKeys(ctx, client)
+			return enhanceAuthError(listKeys(ctx, client))
 
 		case "get":
 			if len(os.Args) < 4 {
 				return fmt.Errorf("usage: %s key get <fingerprint>", os.Args[0])
 			}
 			fingerprint := os.Args[3]
-			return getKey(ctx, client, fingerprint)
+			return enhanceAuthError(getKey(ctx, client, fingerprint))
 
 		case "create":
 			if len(os.Args) < 5 {
@@ -225,7 +244,7 @@ func run() error {
 			}
 			name := os.Args[3]
 			keyData := strings.Join(os.Args[4:], " ")
-			return createKey(ctx, client, name, keyData)
+			return enhanceAuthError(createKey(ctx, client, name, keyData))
 
 		case "rename":
 			if len(os.Args) < 5 {
@@ -233,14 +252,14 @@ func run() error {
 			}
 			fingerprint := os.Args[3]
 			newName := os.Args[4]
-			return renameKey(ctx, client, fingerprint, newName)
+			return enhanceAuthError(renameKey(ctx, client, fingerprint, newName))
 
 		case "delete":
 			if len(os.Args) < 4 {
 				return fmt.Errorf("usage: %s key delete <fingerprint>", os.Args[0])
 			}
 			fingerprint := os.Args[3]
-			return deleteKey(ctx, client, fingerprint)
+			return enhanceAuthError(deleteKey(ctx, client, fingerprint))
 
 		default:
 			return fmt.Errorf("unknown key subcommand: %s\nSubcommands:\n  list                          - List all SSH keys\n  get <fingerprint>             - Get SSH key details\n  create <name> <key-data>      - Create a new SSH key\n  rename <fingerprint> <name>   - Rename an SSH key\n  delete <fingerprint>          - Delete an SSH key", subcommand)
@@ -254,7 +273,7 @@ func run() error {
 		subcommand := os.Args[2]
 		switch subcommand {
 		case "list":
-			return listAuctionServers(ctx, client)
+			return enhanceAuthError(listAuctionServers(ctx, client))
 
 		default:
 			return fmt.Errorf("unknown auction subcommand: %s\nSubcommands:\n  list    - List available auction servers", subcommand)
@@ -277,7 +296,7 @@ func run() error {
 			}
 			sshKeyFingerprint := os.Args[4]
 			testMode := len(os.Args) > 5 && os.Args[5] == "--test"
-			return orderMarketServer(ctx, client, uint32(productID), sshKeyFingerprint, testMode)
+			return enhanceAuthError(orderMarketServer(ctx, client, uint32(productID), sshKeyFingerprint, testMode))
 
 		default:
 			return fmt.Errorf("unknown order subcommand: %s\nSubcommands:\n  market <product-id> <ssh-key-fingerprint> [--test]  - Order a server from marketplace", subcommand)
@@ -295,14 +314,14 @@ func run() error {
 			if len(os.Args) > 3 {
 				serverIP = os.Args[3]
 			}
-			return listRDNS(ctx, client, serverIP)
+			return enhanceAuthError(listRDNS(ctx, client, serverIP))
 
 		case "get":
 			if len(os.Args) < 4 {
 				return fmt.Errorf("usage: %s rdns get <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
-			return getRDNS(ctx, client, ip)
+			return enhanceAuthError(getRDNS(ctx, client, ip))
 
 		case "set":
 			if len(os.Args) < 5 {
@@ -310,14 +329,14 @@ func run() error {
 			}
 			ip := os.Args[3]
 			ptr := os.Args[4]
-			return setRDNS(ctx, client, ip, ptr)
+			return enhanceAuthError(setRDNS(ctx, client, ip, ptr))
 
 		case "delete":
 			if len(os.Args) < 4 {
 				return fmt.Errorf("usage: %s rdns delete <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
-			return deleteRDNS(ctx, client, ip)
+			return enhanceAuthError(deleteRDNS(ctx, client, ip))
 
 		default:
 			return fmt.Errorf("unknown rdns subcommand: %s\nSubcommands:\n  list [server-ip] - List all reverse DNS entries\n  get <ip>         - Get reverse DNS entry for an IP\n  set <ip> <ptr>   - Set reverse DNS entry for an IP\n  delete <ip>      - Delete reverse DNS entry for an IP", subcommand)
@@ -331,14 +350,14 @@ func run() error {
 		subcommand := os.Args[2]
 		switch subcommand {
 		case "list":
-			return listFailovers(ctx, client)
+			return enhanceAuthError(listFailovers(ctx, client))
 
 		case "get":
 			if len(os.Args) < 4 {
 				return fmt.Errorf("usage: %s failover get <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
-			return getFailover(ctx, client, ip)
+			return enhanceAuthError(getFailover(ctx, client, ip))
 
 		case "set":
 			if len(os.Args) < 5 {
@@ -346,14 +365,14 @@ func run() error {
 			}
 			ip := os.Args[3]
 			destIP := os.Args[4]
-			return setFailover(ctx, client, ip, destIP)
+			return enhanceAuthError(setFailover(ctx, client, ip, destIP))
 
 		case "delete":
 			if len(os.Args) < 4 {
 				return fmt.Errorf("usage: %s failover delete <ip>", os.Args[0])
 			}
 			ip := os.Args[3]
-			return deleteFailover(ctx, client, ip)
+			return enhanceAuthError(deleteFailover(ctx, client, ip))
 
 		default:
 			return fmt.Errorf("unknown failover subcommand: %s\nSubcommands:\n  list            - List all failover IPs\n  get <ip>        - Get failover IP details\n  set <ip> <dst>  - Route failover IP to destination server\n  delete <ip>     - Unroute failover IP", subcommand)
@@ -363,6 +382,41 @@ func run() error {
 		printHelp()
 		return fmt.Errorf("unknown command: %s", command)
 	}
+}
+
+// enhanceAuthError checks if an error is an authentication error and adds helpful instructions.
+func enhanceAuthError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check if this is an unauthorized error (check wrapped errors too)
+	var hrobotErr *hrobot.Error
+	if errors.As(err, &hrobotErr) && hrobot.IsUnauthorizedError(hrobotErr) {
+		return fmt.Errorf(`%w
+
+Authentication failed. Please verify your credentials are correct.
+
+To get or reset your credentials:
+  1. Visit: https://robot.hetzner.com/preferences/index
+  2. Navigate to the 'Webservice and app settings' section
+  3. Retrieve username and set new password
+
+Note: If you want to order servers via the API, you also need to:
+  1. Go to 'Webservice and app settings' -> 'Ordering'
+  2. Enable 'ordering over the webservice'
+  3. Click 'confirm' to save the setting
+
+To limit API access to certain IP-address:
+  1. Go to 'Webservice and app settings' -> 'Webservice/app access'
+  2. Add your IP and save
+
+Example usage:
+  export HROBOT_USERNAME='#ws+XXXXXXX'
+  export HROBOT_PASSWORD='XXXXXX-YYYYYY-ZZZZZ'`, err)
+	}
+
+	return err
 }
 
 func printHelp() {
