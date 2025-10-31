@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/aquasecurity/table"
@@ -21,7 +22,7 @@ func listAuctionServers(ctx context.Context, client *hrobot.Client) error {
 	fmt.Printf("Found %d auction server(s):\n\n", len(servers))
 
 	// Create table
-	t := table.New(nil)
+	t := table.New(os.Stdout)
 	t.SetHeaders("ID", "Name", "CPU", "Memory", "Storage", "Price/mo", "Setup", "Location", "Status")
 
 	for _, server := range servers {

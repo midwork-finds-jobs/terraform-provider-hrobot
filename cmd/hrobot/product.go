@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/aquasecurity/table"
@@ -21,7 +22,7 @@ func listProducts(ctx context.Context, client *hrobot.Client) error {
 	fmt.Printf("Available Product Servers (%d found)\n\n", len(products))
 
 	// Create table
-	t := table.New(nil)
+	t := table.New(os.Stdout)
 	t.SetHeaders("Product ID", "Name", "Price from", "Setup Fee", "Locations")
 
 	for _, product := range products {

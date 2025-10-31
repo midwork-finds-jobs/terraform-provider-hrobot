@@ -24,7 +24,7 @@ func listKeys(ctx context.Context, client *hrobot.Client) error {
 	fmt.Printf("Found %d SSH key(s):\n\n", len(keys))
 
 	// Create table
-	t := table.New(nil)
+	t := table.New(os.Stdout)
 	t.SetHeaders("#", "Name", "Fingerprint", "Type", "Size", "Created")
 
 	for i, key := range keys {

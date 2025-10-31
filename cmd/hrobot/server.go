@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,7 +76,7 @@ func listServers(ctx context.Context, client *hrobot.Client) error {
 
 	fmt.Printf("Found %d server(s):\n\n", len(servers))
 
-	t := table.New(nil)
+	t := table.New(os.Stdout)
 	t.SetHeaders("Server #", "Name", "IP", "Product", "DC", "Status")
 
 	for _, server := range servers {
@@ -284,7 +285,7 @@ func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 	fromTime, _ := time.Parse("2006-01-02", fromDate)
 
 	// Create table
-	t := table.New(nil)
+	t := table.New(os.Stdout)
 	t.SetHeaders("Date", "Download", "Upload", "Graph")
 
 	for _, date := range dates {

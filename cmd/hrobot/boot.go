@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -43,7 +44,7 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 	}
 
 	// Create table
-	t := table.New(nil)
+	t := table.New(os.Stdout)
 	t.SetHeaders("Installation Type", "Active", "Distribution/OS", "Languages")
 
 	// Rescue System
