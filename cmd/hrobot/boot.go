@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/aquasecurity/table"
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
@@ -36,15 +37,14 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 	}
 
 	if serverNumber > 0 {
-		fmt.Printf("Boot Configuration for Server #%d (%s)\n", serverNumber, serverIP)
+		fmt.Printf("Boot Configuration for Server #%d (%s)\n\n", serverNumber, serverIP)
 	} else {
-		fmt.Printf("Boot Configuration\n")
+		fmt.Printf("Boot Configuration\n\n")
 	}
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 
-	// Display headers
-	fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", "Installation Type", "Active", "Distribution/OS", "Languages")
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━┼━━━━━━━━┼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	// Create table
+	t := table.New(nil)
+	t.SetHeaders("Installation Type", "Active", "Distribution/OS", "Languages")
 
 	// Rescue System
 	if config.Rescue != nil {
@@ -88,10 +88,10 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 				if i == 0 && extraInfo != "" {
 					lang = extraInfo
 				}
-				fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", installType, status, os, lang)
+				t.AddRow(installType, status, os, lang)
 			}
 		} else {
-			fmt.Printf("%-18s │ %-6s │ %-35s │\n", "Rescue System", activeStatus, "(no OS options)")
+			t.AddRow("Rescue System", activeStatus, "(no OS options)", "")
 		}
 	}
 
@@ -140,10 +140,10 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 						lang += fmt.Sprintf(" | Hostname: %s", config.Linux.Hostname)
 					}
 				}
-				fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", installType, status, dist, lang)
+				t.AddRow(installType, status, dist, lang)
 			}
 		} else {
-			fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", "Linux Install", activeStatus, "(no distributions)", languages)
+			t.AddRow("Linux Install", activeStatus, "(no distributions)", languages)
 		}
 	}
 
@@ -189,10 +189,10 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 					status = activeStatus
 					lang = languages
 				}
-				fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", installType, status, dist, lang)
+				t.AddRow(installType, status, dist, lang)
 			}
 		} else {
-			fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", "VNC Install", activeStatus, "(no distributions)", languages)
+			t.AddRow("VNC Install", activeStatus, "(no distributions)", languages)
 		}
 	}
 
@@ -238,13 +238,14 @@ func getBootConfig(ctx context.Context, client *hrobot.Client, serverID hrobot.S
 					status = activeStatus
 					lang = languages
 				}
-				fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", installType, status, os, lang)
+				t.AddRow(installType, status, os, lang)
 			}
 		} else {
-			fmt.Printf("%-18s │ %-6s │ %-35s │ %s\n", "Windows Install", activeStatus, "(no OS options)", languages)
+			t.AddRow("Windows Install", activeStatus, "(no OS options)", languages)
 		}
 	}
 
+	t.Render()
 	return nil
 }
 

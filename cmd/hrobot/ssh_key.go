@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aquasecurity/table"
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
@@ -21,15 +22,23 @@ func listKeys(ctx context.Context, client *hrobot.Client) error {
 	}
 
 	fmt.Printf("Found %d SSH key(s):\n\n", len(keys))
+
+	// Create table
+	t := table.New(nil)
+	t.SetHeaders("#", "Name", "Fingerprint", "Type", "Size", "Created")
+
 	for i, key := range keys {
-		fmt.Printf("[%d]\n", i+1)
-		fmt.Printf("    Name:        %s\n", key.Name)
-		fmt.Printf("    Fingerprint: %s\n", key.Fingerprint)
-		fmt.Printf("    Type:        %s\n", key.Type)
-		fmt.Printf("    Size:        %d bits\n", key.Size)
-		fmt.Printf("    Created:     %s\n\n", key.CreatedAt.Format("2006-01-02 15:04:05"))
+		t.AddRow(
+			fmt.Sprintf("%d", i+1),
+			key.Name,
+			key.Fingerprint,
+			key.Type,
+			fmt.Sprintf("%d bits", key.Size),
+			key.CreatedAt.Format("2006-01-02 15:04:05"),
+		)
 	}
 
+	t.Render()
 	return nil
 }
 

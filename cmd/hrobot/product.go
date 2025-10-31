@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aquasecurity/table"
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
@@ -17,12 +18,11 @@ func listProducts(ctx context.Context, client *hrobot.Client) error {
 		return fmt.Errorf("failed to list products: %w", err)
 	}
 
-	fmt.Printf("Available Product Servers (%d found)\n", len(products))
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	fmt.Printf("Available Product Servers (%d found)\n\n", len(products))
 
-	// Display headers
-	fmt.Printf("%-15s │ %-38s │ %-20s │ %-18s │ %s\n", "Product ID", "Name", "Price from", "Setup Fee", "Locations")
-	fmt.Printf("━━━━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	// Create table
+	t := table.New(nil)
+	t.SetHeaders("Product ID", "Name", "Price from", "Setup Fee", "Locations")
 
 	for _, product := range products {
 		locations := strings.Join(product.Locations, ", ")
@@ -49,13 +49,16 @@ func listProducts(ctx context.Context, client *hrobot.Client) error {
 		priceStr := fmt.Sprintf("%.2f €/month", lowestPrice)
 		setupStr := fmt.Sprintf("%.2f €", lowestSetup)
 
-		fmt.Printf("%-15s │ %-38s │ %-20s │ %-18s │ %s\n",
+		t.AddRow(
 			product.ID,
-			truncateString(product.Name, 38),
+			product.Name,
 			priceStr,
 			setupStr,
-			locations)
+			locations,
+		)
 	}
+
+	t.Render()
 
 	fmt.Printf("\nNote: Prices shown are the lowest available across all locations\n")
 	fmt.Printf("      Use 'hrobot product order <product-id>' for full details and location-specific pricing\n")

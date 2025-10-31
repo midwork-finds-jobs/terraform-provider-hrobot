@@ -163,11 +163,3 @@ Environment Variables:
 
 `)
 }
-
-// truncateString truncates a string to the specified maximum length.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
-}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aquasecurity/table"
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
@@ -18,26 +19,45 @@ func listAuctionServers(ctx context.Context, client *hrobot.Client) error {
 	}
 
 	fmt.Printf("Found %d auction server(s):\n\n", len(servers))
-	for i, server := range servers {
-		fmt.Printf("[%d] %s (ID: %d)\n", i+1, server.Name, server.ID)
-		fmt.Printf("    CPU:       %s (Benchmark: %d)\n", server.CPU, server.CPUBenchmark)
-		fmt.Printf("    Memory:    %.0f GB\n", server.MemorySize)
-		fmt.Printf("    Storage:   %s\n", server.HDDText)
-		fmt.Printf("    Price:     %.2f €/month (%.2f € incl. VAT)\n", server.Price.Float64(), server.PriceVAT.Float64())
-		fmt.Printf("    Setup:     %.2f € (%.2f € incl. VAT)\n", server.PriceSetup.Float64(), server.PriceSetupVAT.Float64())
+
+	// Create table
+	t := table.New(nil)
+	t.SetHeaders("ID", "Name", "CPU", "Memory", "Storage", "Price/mo", "Setup", "Location", "Status")
+
+	for _, server := range servers {
+		location := "-"
 		if server.Datacenter != nil {
-			fmt.Printf("    Location:  %s\n", *server.Datacenter)
+			location = *server.Datacenter
 		}
+
+		cpuInfo := fmt.Sprintf("%s (Benchmark: %d)", server.CPU, server.CPUBenchmark)
+		memory := fmt.Sprintf("%.0f GB", server.MemorySize)
+		price := fmt.Sprintf("%.2f €", server.Price.Float64())
+		setup := fmt.Sprintf("%.2f €", server.PriceSetup.Float64())
+
+		status := "Auction"
 		if server.FixedPrice {
-			fmt.Printf("    Status:    Fixed price (lowest price reached)\n")
+			status = "Fixed price"
 		} else if server.NextReduce > 0 {
 			hours := server.NextReduce / 3600
 			minutes := (server.NextReduce % 3600) / 60
-			fmt.Printf("    Next cut:  in %dh %dm (%s)\n", hours, minutes, server.NextReduceDate)
+			status = fmt.Sprintf("Next cut: %dh %dm", hours, minutes)
 		}
-		fmt.Println()
+
+		t.AddRow(
+			fmt.Sprintf("%d", server.ID),
+			server.Name,
+			cpuInfo,
+			memory,
+			server.HDDText,
+			price,
+			setup,
+			location,
+			status,
+		)
 	}
 
+	t.Render()
 	return nil
 }
 

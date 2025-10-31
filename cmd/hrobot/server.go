@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aquasecurity/table"
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
@@ -73,14 +74,22 @@ func listServers(ctx context.Context, client *hrobot.Client) error {
 	}
 
 	fmt.Printf("Found %d server(s):\n\n", len(servers))
+
+	t := table.New(nil)
+	t.SetHeaders("Server #", "Name", "IP", "Product", "DC", "Status")
+
 	for _, server := range servers {
-		fmt.Printf("Server #%d: %s\n", server.ServerNumber, server.ServerName)
-		fmt.Printf("  IP:      %s\n", server.ServerIP.String())
-		fmt.Printf("  Product: %s\n", server.Product)
-		fmt.Printf("  DC:      %s\n", server.DC)
-		fmt.Printf("  Status:  %s\n\n", server.Status)
+		t.AddRow(
+			fmt.Sprintf("%d", server.ServerNumber),
+			server.ServerName,
+			server.ServerIP.String(),
+			server.Product,
+			server.DC,
+			string(server.Status),
+		)
 	}
 
+	t.Render()
 	return nil
 }
 
@@ -258,14 +267,9 @@ func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 	sort.Strings(dates)
 
 	// Display traffic graph
-	fmt.Printf("Traffic Statistics (GB)\n")
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	fmt.Printf("Traffic Statistics (GB)\n\n")
 
-	// Display headers
-	fmt.Printf("%-10s │ %10s │ %10s │ Graph\n", "Date", "Download", "Upload")
-	fmt.Printf("━━━━━━━━━━━┼━━━━━━━━━━━━┼━━━━━━━━━━━━┼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-
-	// Determine scale
+	// Determine scale for bar chart
 	barWidth := 50
 	scale := maxTraffic / float64(barWidth)
 	if scale == 0 {
@@ -278,6 +282,10 @@ func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 
 	// Parse the from date to get year and month context
 	fromTime, _ := time.Parse("2006-01-02", fromDate)
+
+	// Create table
+	t := table.New(nil)
+	t.SetHeaders("Date", "Download", "Upload", "Graph")
 
 	for _, date := range dates {
 		traffic := ipData[date]
@@ -304,13 +312,17 @@ func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 			}
 		}
 
-		// Display line
-		fmt.Printf("%-10s │ %7.2f GB │ %7.2f GB │ %s\n",
-			displayDate, traffic.In, traffic.Out, bar)
+		// Add row
+		t.AddRow(
+			displayDate,
+			fmt.Sprintf("%.2f GB", traffic.In),
+			fmt.Sprintf("%.2f GB", traffic.Out),
+			bar,
+		)
 	}
 
-	fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("Total Traffic: %.2f GB (↓%.2f GB in, ↑%.2f GB out)\n", totalSum, totalIn, totalOut)
+	t.Render()
+	fmt.Printf("\nTotal Traffic: %.2f GB (↓%.2f GB in, ↑%.2f GB out)\n", totalSum, totalIn, totalOut)
 	fmt.Printf("Average per day: %.2f GB\n", totalSum/float64(len(dates)))
 
 	return nil
