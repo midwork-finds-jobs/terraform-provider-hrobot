@@ -20,7 +20,7 @@
 
   scripts.build-all.exec = ''
     go build -v -o terraform-provider-hrobot
-    go build -v -o hrobot cmd/hrobot/main.go
+    go build -v -o hrobot ./cmd/hrobot
   '';
 
   packages = with pkgs; [
