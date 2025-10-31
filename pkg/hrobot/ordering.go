@@ -21,6 +21,53 @@ func NewOrderingService(client *Client) *OrderingService {
 	return &OrderingService{client: client}
 }
 
+// Product represents a standard product server available for order.
+type Product struct {
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Description     []string       `json:"description"`
+	Traffic         string         `json:"traffic"`
+	Distributions   []string       `json:"dist"`
+	Languages       []string       `json:"lang"`
+	Locations       []string       `json:"location"`
+	Prices          []ProductPrice `json:"prices"`
+	OrderableAddons []ProductAddon `json:"orderable_addons"`
+}
+
+// ProductPrice represents location-specific pricing for a product.
+type ProductPrice struct {
+	Location   string           `json:"location"`
+	Price      ProductPriceInfo `json:"price"`
+	PriceSetup ProductPriceInfo `json:"price_setup"`
+}
+
+// ProductPriceInfo represents price details.
+type ProductPriceInfo struct {
+	Net         StringFloat `json:"net"`
+	Gross       StringFloat `json:"gross"`
+	HourlyNet   StringFloat `json:"hourly_net"`
+	HourlyGross StringFloat `json:"hourly_gross"`
+}
+
+// ProductAddon represents an addon that can be purchased with a product server.
+type ProductAddon struct {
+	ID     string              `json:"id"`
+	Name   string              `json:"name"`
+	Min    uint32              `json:"min"`
+	Max    uint32              `json:"max"`
+	Prices []ProductAddonPrice `json:"price"`
+}
+
+// ProductAddonPrice represents the price for an addon in a specific location.
+type ProductAddonPrice struct {
+	Location        string  `json:"location"`
+	Price           float64 `json:"price"`
+	PriceSetup      float64 `json:"price_setup"`
+	PriceMonthly    float64 `json:"price_monthly"`
+	PriceMonthlyVAT float64 `json:"price_monthly_vat"`
+	PriceSetupVAT   float64 `json:"price_setup_vat"`
+}
+
 // AuthorizationMethod specifies how to authorize access to a newly provisioned server.
 type AuthorizationMethod struct {
 	// SSH key fingerprints (use this OR password, not both)
@@ -394,4 +441,32 @@ func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context
 			// Otherwise keep waiting
 		}
 	}
+}
+
+// ListProducts retrieves all standard product servers available for order.
+//
+// GET /order/server/product
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#get-order-server-product
+func (o *OrderingService) ListProducts(ctx context.Context) ([]Product, error) {
+	path := "/order/server/product"
+	var result []Product
+	if err := o.client.GetWrappedList(ctx, path, "product", &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetProduct retrieves a specific product server by ID.
+//
+// GET /order/server/product/{id}
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#get-order-server-product-id
+func (o *OrderingService) GetProduct(ctx context.Context, productID string) (*Product, error) {
+	path := fmt.Sprintf("/order/server/product/%s", productID)
+	var result Product
+	if err := o.client.Get(ctx, path, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

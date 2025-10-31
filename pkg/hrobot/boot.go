@@ -142,7 +142,7 @@ func (b *BootService) GetLastRescue(ctx context.Context, serverID ServerID) (*Re
 }
 
 // ActivateLinux activates Linux installation.
-func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, dist string, arch int, lang string) error {
+func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, dist string, arch int, lang string, authorizedKeys []string) (*LinuxConfig, error) {
 	path := fmt.Sprintf("/boot/%s/linux", serverID.String())
 
 	data := url.Values{}
@@ -150,11 +150,45 @@ func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, dist
 	data.Set("arch", fmt.Sprintf("%d", arch))
 	data.Set("lang", lang)
 
-	return b.client.Post(ctx, path, data, nil)
+	for _, key := range authorizedKeys {
+		data.Add("authorized_key[]", key)
+	}
+
+	var linux LinuxConfig
+	err := b.client.Post(ctx, path, data, &linux)
+	if err != nil {
+		return nil, err
+	}
+
+	return &linux, nil
 }
 
 // DeactivateLinux deactivates Linux installation.
 func (b *BootService) DeactivateLinux(ctx context.Context, serverID ServerID) error {
 	path := fmt.Sprintf("/boot/%s/linux", serverID.String())
+	return b.client.Delete(ctx, path)
+}
+
+// ActivateVNC activates VNC installation.
+func (b *BootService) ActivateVNC(ctx context.Context, serverID ServerID, dist string, arch int, lang string) (*VNCConfig, error) {
+	path := fmt.Sprintf("/boot/%s/vnc", serverID.String())
+
+	data := url.Values{}
+	data.Set("dist", dist)
+	data.Set("arch", fmt.Sprintf("%d", arch))
+	data.Set("lang", lang)
+
+	var vnc VNCConfig
+	err := b.client.Post(ctx, path, data, &vnc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vnc, nil
+}
+
+// DeactivateVNC deactivates VNC installation.
+func (b *BootService) DeactivateVNC(ctx context.Context, serverID ServerID) error {
+	path := fmt.Sprintf("/boot/%s/vnc", serverID.String())
 	return b.client.Delete(ctx, path)
 }

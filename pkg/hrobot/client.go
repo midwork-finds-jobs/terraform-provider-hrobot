@@ -41,6 +41,7 @@ type Client struct {
 	VSwitch  *VSwitchService
 	RDNS     *RDNSService
 	Failover *FailoverService
+	Traffic  *TrafficService
 }
 
 // ClientOption configures the Client.
@@ -95,6 +96,7 @@ func NewClient(username, password string, opts ...ClientOption) *Client {
 	c.VSwitch = NewVSwitchService(c)
 	c.RDNS = NewRDNSService(c)
 	c.Failover = NewFailoverService(c)
+	c.Traffic = NewTrafficService(c)
 
 	return c
 }

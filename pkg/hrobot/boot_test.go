@@ -299,7 +299,7 @@ func TestBootService_ActivateLinux(t *testing.T) {
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 			ctx := context.Background()
 
-			err := client.Boot.ActivateLinux(ctx, ServerID(321), tt.dist, tt.arch, tt.lang)
+			_, err := client.Boot.ActivateLinux(ctx, ServerID(321), tt.dist, tt.arch, tt.lang, []string{})
 			if err != nil {
 				t.Fatalf("Boot.ActivateLinux returned error: %v", err)
 			}
