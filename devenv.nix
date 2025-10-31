@@ -73,7 +73,6 @@
       };
     };
     # Try not to leak secrets
-    trufflehog.enable = true;
     ripsecrets.enable = true;
   };
 }
