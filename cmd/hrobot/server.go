@@ -189,7 +189,7 @@ func powerOffServer(ctx context.Context, client *hrobot.Client, serverID hrobot.
 
 func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, args []string) error {
 	// Parse flags
-	days := 30
+	days := 14
 	var fromDate, toDate string
 
 	for i := 0; i < len(args); i++ {
@@ -233,27 +233,75 @@ func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 
 	// Fetch traffic data
 	fmt.Printf("Fetching traffic data for server #%d (%s)...\n", serverID, serverIP)
-	fmt.Printf("  Period: %s to %s\n\n", fromDate, toDate)
+	fmt.Printf("  Period: %s to %s\n", fromDate, toDate)
 
-	// Use month type with single_values=true for proper format
-	params := hrobot.TrafficGetParams{
-		Type:         hrobot.TrafficTypeMonth,
-		From:         fromDate,
-		To:           toDate,
-		IP:           serverIP,
-		SingleValues: true,
-	}
-
-	trafficData, err := client.Traffic.Get(ctx, params)
+	// Parse dates to check if they span multiple months
+	fromTime, err := time.Parse("2006-01-02", fromDate)
 	if err != nil {
-		return fmt.Errorf("failed to get traffic data: %w", err)
+		return fmt.Errorf("invalid from date: %w", err)
+	}
+	toTime, err := time.Parse("2006-01-02", toDate)
+	if err != nil {
+		return fmt.Errorf("invalid to date: %w", err)
 	}
 
-	// Extract data for the server IP
-	ipData, ok := trafficData.Data[serverIP]
-	if !ok || len(ipData) == 0 {
+	fmt.Println()
+
+	// If query spans multiple months, we need to make separate requests
+	// The API only supports single-month queries with type=month
+	allData := make(map[string]hrobot.TrafficStats)
+
+	// Generate list of month ranges to query
+	currentStart := fromTime
+	for currentStart.Before(toTime) || currentStart.Equal(toTime) {
+		// Calculate end of current month or toTime, whichever is earlier
+		endOfMonth := time.Date(currentStart.Year(), currentStart.Month()+1, 0, 0, 0, 0, 0, currentStart.Location())
+
+		rangeEnd := toTime
+		if endOfMonth.Before(toTime) {
+			rangeEnd = endOfMonth
+		}
+
+		// Query this month's data
+		params := hrobot.TrafficGetParams{
+			Type:         hrobot.TrafficTypeMonth,
+			From:         currentStart.Format("2006-01-02"),
+			To:           rangeEnd.Format("2006-01-02"),
+			IP:           serverIP,
+			SingleValues: true,
+		}
+
+		trafficData, err2 := client.Traffic.Get(ctx, params)
+		if err2 != nil {
+			return fmt.Errorf("failed to get traffic data for %s: %w", currentStart.Format("2006-01"), err2)
+		}
+
+		// Merge data - convert day numbers to full dates
+		if ipData, ok := trafficData.Data[serverIP]; ok {
+			yearMonth := currentStart.Format("2006-01")
+			for day, stats := range ipData {
+				// Construct full date from year-month and day number
+				fullDate := fmt.Sprintf("%s-%s", yearMonth, day)
+				allData[fullDate] = stats
+			}
+		}
+
+		// Move to next month
+		currentStart = endOfMonth.AddDate(0, 0, 1)
+	}
+
+	if len(allData) == 0 {
 		fmt.Println("No traffic data available for this period.")
 		return nil
+	}
+
+	// Filter data to only include dates within the requested range
+	ipData := make(map[string]hrobot.TrafficStats)
+	for date, stats := range allData {
+		// Simple string comparison works since dates are in YYYY-MM-DD format
+		if date >= fromDate && date <= toDate {
+			ipData[date] = stats
+		}
 	}
 
 	// Sort dates and find max traffic for scaling
@@ -281,8 +329,7 @@ func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 	totalOut := 0.0
 	totalSum := 0.0
 
-	// Parse the from date to get year and month context
-	fromTime, _ := time.Parse("2006-01-02", fromDate)
+	// fromTime is already parsed above, no need to parse again
 
 	// Create table
 	t := table.New(os.Stdout)

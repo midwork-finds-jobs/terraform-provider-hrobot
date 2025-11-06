@@ -19,6 +19,13 @@ func main() {
 	}
 }
 
+// printGlobalFlags prints the global flags section for help output.
+func printGlobalFlags() {
+	fmt.Println("\nGlobal Flags:")
+	fmt.Println("      --config string              Config file path (default \"~/.config/hrobot/cli.toml\")")
+	fmt.Println("      --context string             Currently active context")
+}
+
 func run() error {
 	// Parse command line arguments
 	if len(os.Args) < 2 {
@@ -34,12 +41,22 @@ func run() error {
 		return nil
 	}
 
-	// Get credentials from environment
-	username := os.Getenv("HROBOT_USERNAME")
-	password := os.Getenv("HROBOT_PASSWORD")
+	// Handle context command (doesn't require credentials)
+	if command == "context" {
+		return handleContextCommand()
+	}
+
+	// Get credentials from context first, then fall back to environment
+	username, password := getCredentialsFromContext()
+
+	// Fall back to environment variables if no context is active
+	if username == "" || password == "" {
+		username = os.Getenv("HROBOT_USERNAME")
+		password = os.Getenv("HROBOT_PASSWORD")
+	}
 
 	if username == "" || password == "" {
-		return fmt.Errorf(`HROBOT_USERNAME and HROBOT_PASSWORD environment variables must be set
+		return fmt.Errorf(`HROBOT_USERNAME and HROBOT_PASSWORD environment variables must be set, or use 'hrobot context' to manage credentials
 
 To get your credentials:
   1. Visit: https://robot.hetzner.com/preferences/index
@@ -55,9 +72,13 @@ To limit API access to certain IP-address:
   1. Go to 'Webservice and app settings' -> 'Webservice/app access'
   2. Add your IP and save
 
-Example usage:
+Example usage with environment variables:
   export HROBOT_USERNAME='#ws+XXXXXXX'
-  export HROBOT_PASSWORD='YYYYYY'`)
+  export HROBOT_PASSWORD='YYYYYY'
+
+Or use context management:
+  hrobot context create <name> --username '#ws+XXXXXXX' --password 'YYYYYY'
+  hrobot context use <name>`)
 	}
 
 	// Create client
@@ -113,6 +134,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Describe detailed information about a specific server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number to describe")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -128,6 +150,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Reboot a server using hardware reset.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number to reboot")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -145,6 +168,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  <server-id>                                  The server number to shutdown")
 			fmt.Println("\nFlags:")
 			fmt.Println("  --order-manual-power-cycle-from-technician   Emails datacenter technician to manually turn the server off and on")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -171,6 +195,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Power on a server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number to power on")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -186,6 +211,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Power off a server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number to power off")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -205,6 +231,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  --linux        Use Linux rescue system (default)")
 			fmt.Println("  --vkvm         Use VNC/KVM rescue system")
 			fmt.Println("  --password     Use password-based authentication instead of SSH keys")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -232,6 +259,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Disable rescue system for a server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -248,10 +276,11 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
 			fmt.Println("\nFlags:")
-			fmt.Println("  --days <n>     Number of days to show (default: 30)")
+			fmt.Println("  --days <n>     Number of days to show (default: 14)")
 			fmt.Println("  --from <date>  Start date in YYYY-MM-DD format")
 			fmt.Println("  --to <date>    End date in YYYY-MM-DD format")
 			fmt.Println("\nNote: If --from and --to are specified, --days is ignored.")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -267,6 +296,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Show boot/image configuration for a server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -290,6 +320,7 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  --yes               Skip confirmation prompt")
 			fmt.Println("\nNote: The distribution name will be matched to the newest available version.")
 			fmt.Println("      WARNING: This will format all drives on the server!")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -318,6 +349,7 @@ func handleFirewallCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Describe firewall configuration for a server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -334,6 +366,7 @@ func handleFirewallCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
 			fmt.Println("  <ip>           The IP address to allow")
+			printGlobalFlags()
 			return nil
 		}
 		serverIDStr := os.Args[3]
@@ -366,6 +399,7 @@ func handleSSHKeyCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Describe detailed information about a specific SSH key.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <name>    The name of the SSH key to describe")
+			printGlobalFlags()
 			return nil
 		}
 		name := os.Args[3]
@@ -378,6 +412,7 @@ func handleSSHKeyCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <name>      The name for the new SSH key")
 			fmt.Println("  <file|->    Path to the public key file, or '-' to read from stdin")
+			printGlobalFlags()
 			return nil
 		}
 		name := os.Args[3]
@@ -391,6 +426,7 @@ func handleSSHKeyCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <name>        The current name of the SSH key")
 			fmt.Println("  <new-name>    The new name for the SSH key")
+			printGlobalFlags()
 			return nil
 		}
 		name := os.Args[3]
@@ -403,6 +439,7 @@ func handleSSHKeyCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Delete an SSH key.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <name>    The name of the SSH key to delete")
+			printGlobalFlags()
 			return nil
 		}
 		name := os.Args[3]
@@ -434,6 +471,7 @@ func handleRDNSCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Describe reverse DNS entry for an IP address.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <ip>    The IP address to query")
+			printGlobalFlags()
 			return nil
 		}
 		ip := os.Args[3]
@@ -446,6 +484,7 @@ func handleRDNSCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <ip>     The IP address to configure")
 			fmt.Println("  <ptr>    The PTR record value (hostname)")
+			printGlobalFlags()
 			return nil
 		}
 		ip := os.Args[3]
@@ -458,6 +497,7 @@ func handleRDNSCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Reset reverse DNS entry to default Hetzner value.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <ip>    The IP address to reset")
+			printGlobalFlags()
 			return nil
 		}
 		ip := os.Args[3]
@@ -485,6 +525,7 @@ func handleFailoverCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Describe failover IP details.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <ip>    The failover IP address")
+			printGlobalFlags()
 			return nil
 		}
 		ip := os.Args[3]
@@ -497,6 +538,7 @@ func handleFailoverCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <ip>              The failover IP address")
 			fmt.Println("  <destination-ip>  The destination server IP")
+			printGlobalFlags()
 			return nil
 		}
 		ip := os.Args[3]
@@ -509,6 +551,7 @@ func handleFailoverCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Unroute a failover IP.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <ip>    The failover IP address to unroute")
+			printGlobalFlags()
 			return nil
 		}
 		ip := os.Args[3]
@@ -536,6 +579,7 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Describe vSwitch details.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <id>    The vSwitch ID")
+			printGlobalFlags()
 			return nil
 		}
 		id, err := strconv.Atoi(os.Args[3])
@@ -551,6 +595,7 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <name>    The name for the new vSwitch")
 			fmt.Println("  <vlan>    The VLAN ID (4000-4091)")
+			printGlobalFlags()
 			return nil
 		}
 		name := os.Args[3]
@@ -568,6 +613,7 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  <id>      The vSwitch ID")
 			fmt.Println("  <name>    The new name for the vSwitch")
 			fmt.Println("  <vlan>    The new VLAN ID (4000-4091)")
+			printGlobalFlags()
 			return nil
 		}
 		id, err := strconv.Atoi(os.Args[3])
@@ -589,6 +635,7 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  <id>          The vSwitch ID")
 			fmt.Println("\nFlags:")
 			fmt.Println("  --immediate   Cancel immediately (default: end of month)")
+			printGlobalFlags()
 			return nil
 		}
 		id, err := strconv.Atoi(os.Args[3])
@@ -611,6 +658,7 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <id>     The vSwitch ID")
 			fmt.Println("  <ip>     Server IP address(es) to add")
+			printGlobalFlags()
 			return nil
 		}
 		id, err := strconv.Atoi(os.Args[3])
@@ -627,6 +675,7 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nArguments:")
 			fmt.Println("  <id>     The vSwitch ID")
 			fmt.Println("  <ip>     Server IP address(es) to remove")
+			printGlobalFlags()
 			return nil
 		}
 		id, err := strconv.Atoi(os.Args[3])
@@ -661,6 +710,7 @@ func handleAuctionCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  --disk-space-min=<gb>       Minimum disk space in GB (e.g., 7000)")
 			fmt.Println("  --price-max=<euros>         Maximum monthly price in euros (e.g., 200)")
 			fmt.Println("  --gpu                       Show only servers with GPU")
+			printGlobalFlags()
 			return nil
 		}
 
@@ -716,6 +766,7 @@ func handleAuctionCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Show detailed information about a specific auction server.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>   The auction server ID")
+			printGlobalFlags()
 			return nil
 		}
 		serverID, err := strconv.ParseUint(os.Args[3], 10, 32)
@@ -734,6 +785,7 @@ func handleAuctionCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("\nFlags:")
 			fmt.Println("  --yes             Skip confirmation prompt")
 			fmt.Println("  --test            Test mode - does not actually place the order")
+			printGlobalFlags()
 			return nil
 		}
 		productID, err := strconv.ParseUint(os.Args[3], 10, 32)
@@ -806,6 +858,7 @@ func handleProductCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("  --disk-space-min=<gb>       Minimum disk space in GB (e.g., 7000)")
 			fmt.Println("  --price-max=<euros>         Maximum monthly price in euros (e.g., 200)")
 			fmt.Println("  --gpu                       Show only servers with GPU")
+			printGlobalFlags()
 			return nil
 		}
 
@@ -861,6 +914,7 @@ func handleProductCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("Show detailed information about a specific product.")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <product-id>   The product ID (e.g., EX44, AX41-NVMe)")
+			printGlobalFlags()
 			return nil
 		}
 		productID := os.Args[3]
@@ -878,6 +932,7 @@ func handleProductCommand(ctx context.Context, client *hrobot.Client) error {
 			fmt.Println("                    If not specified, automatically selects location with shortest availability")
 			fmt.Println("  --yes             Skip confirmation prompt")
 			fmt.Println("  --test            Test mode - does not actually place the order")
+			printGlobalFlags()
 			return nil
 		}
 		productID := os.Args[3]
@@ -924,5 +979,58 @@ func handleProductCommand(ctx context.Context, client *hrobot.Client) error {
 
 	default:
 		return fmt.Errorf("unknown product subcommand: %s\nSubcommands:\n  list                  - List available product servers\n  describe <product-id> - Show details about a specific product\n  order <product-id>    - Order a product server", subcommand)
+	}
+}
+
+// handleContextCommand handles all context-related subcommands.
+func handleContextCommand() error {
+	if len(os.Args) < 3 {
+		return fmt.Errorf("usage: %s context <subcommand>\nSubcommands:\n  list           - List all contexts\n  create <name>  - Create a new context\n  use <name>     - Switch to a context\n  active         - Show active context\n  delete <name>  - Delete a context", os.Args[0])
+	}
+
+	subcommand := os.Args[2]
+	switch subcommand {
+	case "list":
+		return listContexts()
+
+	case "create":
+		if len(os.Args) < 4 {
+			return fmt.Errorf("usage: %s context create <name> --username <username> --password <password>", os.Args[0])
+		}
+		name := os.Args[3]
+
+		var username, password string
+		for i := 4; i < len(os.Args); i++ {
+			arg := os.Args[i]
+			if len(arg) > 11 && arg[:11] == "--username=" {
+				username = arg[11:]
+			} else if len(arg) > 11 && arg[:11] == "--password=" {
+				password = arg[11:]
+			}
+		}
+
+		if username == "" || password == "" {
+			return fmt.Errorf("both --username and --password are required")
+		}
+
+		return createContext(name, username, password)
+
+	case "use":
+		if len(os.Args) < 4 {
+			return fmt.Errorf("usage: %s context use <name>", os.Args[0])
+		}
+		return useContext(os.Args[3])
+
+	case "active":
+		return showActiveContext()
+
+	case "delete":
+		if len(os.Args) < 4 {
+			return fmt.Errorf("usage: %s context delete <name>", os.Args[0])
+		}
+		return deleteContextCmd(os.Args[3])
+
+	default:
+		return fmt.Errorf("unknown context subcommand: %s\nSubcommands:\n  list           - List all contexts\n  create <name>  - Create a new context\n  use <name>     - Switch to a context\n  active         - Show active context\n  delete <name>  - Delete a context", subcommand)
 	}
 }
