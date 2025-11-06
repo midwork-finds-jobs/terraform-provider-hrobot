@@ -28,6 +28,7 @@ type Client struct {
 	username   string
 	password   string
 	userAgent  string
+	debug      bool
 
 	// API Services
 	Server   *ServerService
@@ -65,6 +66,13 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 func WithUserAgent(ua string) ClientOption {
 	return func(c *Client) {
 		c.userAgent = ua
+	}
+}
+
+// WithDebug enables debug logging of HTTP requests and responses.
+func WithDebug(debug bool) ClientOption {
+	return func(c *Client) {
+		c.debug = debug
 	}
 }
 
@@ -260,6 +268,17 @@ func unwrapResponse(data []byte) (json.RawMessage, error) {
 func (c *Client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
 	url := c.baseURL + path
 
+	// Read body for logging if debug is enabled
+	var bodyBytes []byte
+	if c.debug && body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, NewNetworkError("failed to read request body for logging", err)
+		}
+		body = bytes.NewReader(bodyBytes)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, NewNetworkError("failed to create request", err)
@@ -270,6 +289,21 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	if c.debug {
+		fmt.Printf("\n=== HTTP Request ===\n")
+		fmt.Printf("%s %s\n", method, url)
+		fmt.Printf("Headers:\n")
+		for k, v := range req.Header {
+			if k != "Authorization" {
+				fmt.Printf("  %s: %s\n", k, v)
+			}
+		}
+		if len(bodyBytes) > 0 {
+			fmt.Printf("Body:\n%s\n", string(bodyBytes))
+		}
+		fmt.Printf("===================\n\n")
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -287,6 +321,17 @@ func (c *Client) handleResponse(resp *http.Response, v interface{}) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return NewNetworkError("failed to read response body", err)
+	}
+
+	if c.debug {
+		fmt.Printf("\n=== HTTP Response ===\n")
+		fmt.Printf("Status: %s\n", resp.Status)
+		fmt.Printf("Headers:\n")
+		for k, v := range resp.Header {
+			fmt.Printf("  %s: %s\n", k, v)
+		}
+		fmt.Printf("Body:\n%s\n", string(body))
+		fmt.Printf("====================\n\n")
 	}
 
 	// Handle error responses

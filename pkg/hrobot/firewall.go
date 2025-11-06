@@ -47,6 +47,7 @@ type FirewallConfig struct {
 	ServerIP     string         `json:"server_ip"`
 	ServerNumber int            `json:"server_number"`
 	Status       FirewallStatus `json:"status"`
+	FilterIPv6   bool           `json:"filter_ipv6"`
 	WhitelistHOS bool           `json:"whitelist_hos"`
 	Port         string         `json:"port"`
 	Rules        FirewallRules  `json:"rules"`
@@ -73,6 +74,7 @@ func (f *FirewallService) Get(ctx context.Context, serverID ServerID) (*Firewall
 type UpdateConfig struct {
 	Status       FirewallStatus
 	WhitelistHOS bool
+	FilterIPv6   bool
 	Rules        FirewallRules
 }
 
@@ -102,6 +104,11 @@ func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config 
 		additional.Set("whitelist_hos", "true")
 	} else {
 		additional.Set("whitelist_hos", "false")
+	}
+	if config.FilterIPv6 {
+		additional.Set("filter_ipv6", "true")
+	} else {
+		additional.Set("filter_ipv6", "false")
 	}
 
 	formData := encoder.MergeValues(additional)

@@ -13,6 +13,10 @@ replacements like:
 sed -i 's/hello/bye/g' just_a_file.txt
 ```
 
+## System time is right
+
+**IMPORTANT: Always trust the output from `date` command. System clock doesn't lie. Even if you think it's wrong it's not**
+
 ## devenv
 
 This repository uses https://devenv.sh to manage the local dependencies.

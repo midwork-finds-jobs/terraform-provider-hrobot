@@ -118,8 +118,23 @@ Available Commands:
     server install <id>                      Install operating system on server
 
   Firewall Commands:
-    firewall describe <server-id>            Describe firewall configuration
-    firewall allow <server-id> <ip>          Add IP to firewall allow list
+    firewall allow-ssh <server-id>           Allow SSH access (see firewall --help)
+    firewall allow-https <server-id>         Allow HTTPS access (see firewall --help)
+    firewall allow-mosh <server-id>          Allow MOSH access (SSH + UDP 60000-61000)
+    firewall block-mail <server-id>          Block mail ports
+    firewall block-http <server-id>          Block insecure HTTP
+    firewall harden <server-id>              Apply security hardening
+    firewall add-rule <server-id>            Add firewall rule
+    firewall delete-rule <server-id>         Delete firewall rule
+    firewall list-rules <server-id>          List firewall rules
+    firewall template list                   List firewall templates
+    firewall template apply <id> <tmpl-id>   Apply template to server
+    firewall enable <server-id>              Enable firewall (use --filter-ipv6=true|false)
+    firewall disable <server-id>             Disable firewall
+    firewall status <server-id>              Show firewall status
+    firewall reset <server-id>               Reset firewall
+
+    For detailed firewall usage, run: hrobot firewall
 
   SSH Key Commands:
     ssh-key list                             List all SSH keys
@@ -156,6 +171,10 @@ Available Commands:
     vswitch delete <id>                      Cancel a vSwitch
     vswitch add-server <id> <ip>             Add server to vSwitch
     vswitch remove-server <id> <ip>          Remove server from vSwitch
+
+Global Flags:
+  --config string                            Config file path (default "~/.config/hrobot/cli.toml")
+  --context string                           Currently active context
 
 Environment Variables:
   HROBOT_USERNAME                            Your Hetzner Robot username (e.g., #ws+XXXXX)

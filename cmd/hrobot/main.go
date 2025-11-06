@@ -4,10 +4,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
@@ -77,12 +79,19 @@ Example usage with environment variables:
   export HROBOT_PASSWORD='YYYYYY'
 
 Or use context management:
-  hrobot context create <name> --username '#ws+XXXXXXX' --password 'YYYYYY'
+  hrobot context create <name>  # Will prompt for credentials
   hrobot context use <name>`)
 	}
 
+	// Check for verbose flag
+	verbose := parseFlagBool(os.Args, "--verbose")
+
 	// Create client
-	client := hrobot.New(username, password)
+	var clientOpts []hrobot.ClientOption
+	if verbose {
+		clientOpts = append(clientOpts, hrobot.WithDebug(true))
+	}
+	client := hrobot.New(username, password, clientOpts...)
 	ctx := context.Background()
 
 	// Route commands to their handlers
@@ -338,48 +347,641 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 // handleFirewallCommand handles all firewall-related subcommands.
 func handleFirewallCommand(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 3 {
-		return fmt.Errorf("usage: %s firewall <subcommand>\nSubcommands:\n  describe <server-id>      - Describe firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", os.Args[0])
+		printFirewallHelp()
+		return nil
 	}
 
 	subcommand := os.Args[2]
 	switch subcommand {
+	// Legacy commands (backward compatibility)
 	case "describe":
 		if len(os.Args) < 4 {
 			fmt.Printf("Usage: %s firewall describe <server-id>\n\n", os.Args[0])
-			fmt.Println("Describe firewall configuration for a server.")
+			fmt.Println("describe firewall configuration for a server (alias for list-rules)")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
 			printGlobalFlags()
 			return nil
 		}
-		serverIDStr := os.Args[3]
-		serverID, err := strconv.Atoi(serverIDStr)
+		serverID, err := parseServerID(os.Args[3])
 		if err != nil {
-			return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			return err
 		}
-		return enhanceAuthError(getFirewall(ctx, client, hrobot.ServerID(serverID)))
+		return enhanceAuthError(getFirewall(ctx, client, serverID))
 
 	case "allow":
 		if len(os.Args) < 5 {
-			fmt.Printf("Usage: %s firewall allow <server-id> <ip>\n\n", os.Args[0])
-			fmt.Println("Add an IP address to the firewall allow list.")
+			fmt.Printf("Usage: %s firewall allow <server-id> <ip|--my-ip>\n\n", os.Args[0])
+			fmt.Println("add an IP address to the firewall allow list")
 			fmt.Println("\nArguments:")
 			fmt.Println("  <server-id>    The server number")
-			fmt.Println("  <ip>           The IP address to allow")
+			fmt.Println("  <ip>           The IP address to allow (or --my-ip to auto-detect)")
 			printGlobalFlags()
 			return nil
 		}
-		serverIDStr := os.Args[3]
-		serverID, err := strconv.Atoi(serverIDStr)
+		serverID, err := parseServerID(os.Args[3])
 		if err != nil {
-			return fmt.Errorf("invalid server ID: %s", serverIDStr)
+			return err
 		}
 		ipAddr := os.Args[4]
-		return enhanceAuthError(allowIP(ctx, client, hrobot.ServerID(serverID), ipAddr))
+		if ipAddr == "--my-ip" {
+			ip, err := getMyIP()
+			if err != nil {
+				return fmt.Errorf("failed to detect your IP: %w", err)
+			}
+			ipAddr = ip
+		}
+		return enhanceAuthError(allowIP(ctx, client, serverID, ipAddr))
+
+	// Phase 1: Convenience commands
+	case "allow-ssh":
+		return handleAllowSSH(ctx, client)
+
+	case "allow-https":
+		return handleAllowHTTPS(ctx, client)
+
+	case "allow-mosh":
+		return handleAllowMOSH(ctx, client)
+
+	case "block-mail":
+		return handleBlockMail(ctx, client)
+
+	case "block-http":
+		return handleBlockHTTP(ctx, client)
+
+	case "harden":
+		return handleHarden(ctx, client)
+
+	// Phase 2: Granular rule management
+	case "add-rule":
+		return handleAddRule(ctx, client)
+
+	case "delete-rule":
+		return handleDeleteRule(ctx, client)
+
+	case "list-rules":
+		return handleListRules(ctx, client)
+
+	// Phase 3: Template management
+	case "template":
+		return handleTemplateCommand(ctx, client)
+
+	// Phase 4: Status management
+	case "enable":
+		return handleEnableFirewall(ctx, client)
+
+	case "disable":
+		return handleDisableFirewall(ctx, client)
+
+	case "status":
+		return handleFirewallStatus(ctx, client)
+
+	case "wait":
+		return handleWaitFirewall(ctx, client)
+
+	case "reset":
+		return handleResetFirewall(ctx, client)
 
 	default:
-		return fmt.Errorf("unknown firewall subcommand: %s\nSubcommands:\n  describe <server-id>      - Describe firewall configuration\n  allow <server-id> <ip>    - Add IP to firewall allow list", subcommand)
+		printFirewallHelp()
+		return fmt.Errorf("unknown firewall subcommand: %s", subcommand)
 	}
+}
+
+func printFirewallHelp() {
+	fmt.Printf("Usage: %s firewall <subcommand> [options]\n\n", os.Args[0])
+	fmt.Println("Subcommands:")
+	fmt.Println("\nConvenience Commands:")
+	fmt.Println("  allow-ssh <server-id> --source-ips <ips> | --my-ip")
+	fmt.Println("      allow SSH access from specific IPs")
+	fmt.Println("  allow-https <server-id> --source-ips <ips>")
+	fmt.Println("      allow HTTPS access from specific IPs (supports IPv6)")
+	fmt.Println("  block-mail <server-id>")
+	fmt.Println("      block common mail ports (25, 587, 465, 143, 993, 995, 110)")
+	fmt.Println("  block-http <server-id>")
+	fmt.Println("      block insecure HTTP (port 80)")
+	fmt.Println("  harden <server-id> [--block-mail] [--block-http]")
+	fmt.Println("      apply common security hardening")
+	fmt.Println("\nRule Management:")
+	fmt.Println("  add-rule <server-id> --direction <in|out> --protocol <proto> [options]")
+	fmt.Println("      add a firewall rule")
+	fmt.Println("  delete-rule <server-id> --name <name> | --index <n> [--direction <in|out>]")
+	fmt.Println("      delete a firewall rule")
+	fmt.Println("  list-rules <server-id> [--direction <in|out>] [--output json]")
+	fmt.Println("      list firewall rules")
+	fmt.Println("\nTemplate Management:")
+	fmt.Println("  template list [--output json]")
+	fmt.Println("      list firewall templates")
+	fmt.Println("  template describe <template-id> [--output json]")
+	fmt.Println("      describe a template")
+	fmt.Println("  template apply <server-id> <template-id>")
+	fmt.Println("      apply template to server")
+	fmt.Println("  template create --name <name> [--from-server <id> | --rules-file <file>]")
+	fmt.Println("      create a new template")
+	fmt.Println("  template delete <template-id> --confirm")
+	fmt.Println("      delete a template")
+	fmt.Println("\nStatus Management:")
+	fmt.Println("  enable <server-id>")
+	fmt.Println("      enable firewall")
+	fmt.Println("  disable <server-id>")
+	fmt.Println("      disable firewall")
+	fmt.Println("  status <server-id>")
+	fmt.Println("      show firewall status")
+	fmt.Println("  wait <server-id>")
+	fmt.Println("      wait for firewall to be ready")
+	fmt.Println("  reset <server-id> --confirm")
+	fmt.Println("      reset firewall (delete all rules)")
+	fmt.Println("\nLegacy:")
+	fmt.Println("  describe <server-id>")
+	fmt.Println("      describe firewall (alias for list-rules)")
+	fmt.Println("  allow <server-id> <ip>")
+	fmt.Println("      add IP to allow list")
+}
+
+func parseServerID(s string) (hrobot.ServerID, error) {
+	id, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid server ID: %s", s)
+	}
+	return hrobot.ServerID(id), nil
+}
+
+func parseFlagStringSlice(args []string, flag string) []string {
+	var results []string
+	for i, arg := range args {
+		// Support both --flag=value and --flag value formats
+		if strings.HasPrefix(arg, flag+"=") {
+			value := strings.TrimPrefix(arg, flag+"=")
+			// Remove surrounding quotes if present
+			value = strings.Trim(value, "'\"")
+			// Split by comma for comma-separated values
+			values := strings.Split(value, ",")
+			for _, v := range values {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					results = append(results, v)
+				}
+			}
+		} else if arg == flag && i+1 < len(args) {
+			// Split by comma for comma-separated values
+			values := strings.Split(args[i+1], ",")
+			for _, v := range values {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					results = append(results, v)
+				}
+			}
+		}
+	}
+	return results
+}
+
+func parseFlagString(args []string, flag string) string {
+	for i, arg := range args {
+		// Support both --flag=value and --flag value formats
+		if strings.HasPrefix(arg, flag+"=") {
+			value := strings.TrimPrefix(arg, flag+"=")
+			// Remove surrounding quotes if present
+			return strings.Trim(value, "'\"")
+		} else if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+func parseFlagInt(args []string, flag string) int {
+	s := parseFlagString(args, flag)
+	if s == "" {
+		return -1
+	}
+	val, err := strconv.Atoi(s)
+	if err != nil {
+		return -1
+	}
+	return val
+}
+
+func parseFlagBool(args []string, flag string) bool {
+	for _, arg := range args {
+		// Support both --flag and --flag=true/false formats
+		if arg == flag {
+			return true
+		}
+		if strings.HasPrefix(arg, flag+"=") {
+			value := strings.TrimPrefix(arg, flag+"=")
+			value = strings.Trim(value, "'\"")
+			// Accept true, 1, yes as true values
+			switch strings.ToLower(value) {
+			case "true", "1", "yes":
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Phase 1 command handlers.
+func handleAllowSSH(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall allow-ssh <server-id> --source-ips <ips> | --my-ip\n\n", os.Args[0])
+		fmt.Println("allow SSH access from specific IPs")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs")
+		fmt.Println("  --my-ip        Use your current public IP")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
+	myIP := parseFlagBool(os.Args, "--my-ip")
+
+	return enhanceAuthError(allowSSH(ctx, client, serverID, sourceIPs, myIP))
+}
+
+func handleAllowHTTPS(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall allow-https <server-id> --source-ips <ips>\n\n", os.Args[0])
+		fmt.Println("allow HTTPS access from specific IPs (supports IPv6)")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs (IPv4 or IPv6)")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
+	if len(sourceIPs) == 0 {
+		return fmt.Errorf("--source-ips is required")
+	}
+
+	return enhanceAuthError(allowHTTPS(ctx, client, serverID, sourceIPs))
+}
+
+func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall allow-mosh <server-id> --source-ips <ips> | --my-ip\n\n", os.Args[0])
+		fmt.Println("allow MOSH access from specific IPs")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs")
+		fmt.Println("  --my-ip        Use your current public IP")
+		fmt.Println("\nCreates 3 rules per IP:")
+		fmt.Println("  • SSH (TCP port 22)")
+		fmt.Println("  • MOSH (UDP ports 60000-61000)")
+		fmt.Println("  • TCP established (ACK, ports 32768-65535)")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
+	myIP := parseFlagBool(os.Args, "--my-ip")
+
+	return enhanceAuthError(allowMOSH(ctx, client, serverID, sourceIPs, myIP))
+}
+
+func handleBlockMail(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall block-mail <server-id>\n\n", os.Args[0])
+		fmt.Println("block common mail ports (25, 587, 465, 143, 993, 995, 110)")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	return enhanceAuthError(blockMail(ctx, client, serverID))
+}
+
+func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall block-http <server-id>\n\n", os.Args[0])
+		fmt.Println("block insecure HTTP (port 80)")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	return enhanceAuthError(blockHTTP(ctx, client, serverID))
+}
+
+func handleHarden(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall harden <server-id> [--block-mail] [--block-http]\n\n", os.Args[0])
+		fmt.Println("apply common security hardening")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --block-mail   Block mail ports")
+		fmt.Println("  --block-http   Block insecure HTTP")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	blockMailFlag := parseFlagBool(os.Args, "--block-mail")
+	blockHTTPFlag := parseFlagBool(os.Args, "--block-http")
+
+	return enhanceAuthError(hardenFirewall(ctx, client, serverID, blockMailFlag, blockHTTPFlag))
+}
+
+// Phase 2 command handlers.
+func handleAddRule(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall add-rule <server-id> --direction <in|out> --protocol <proto> [options]\n\n", os.Args[0])
+		fmt.Println("add a firewall rule")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>       The server number")
+		fmt.Println("\nRequired Flags:")
+		fmt.Println("  --direction       in or out")
+		fmt.Println("  --protocol        tcp, udp, icmp, esp, or gre")
+		fmt.Println("\nOptional Flags:")
+		fmt.Println("  --source-ips      Comma-separated source IPs (for direction=in)")
+		fmt.Println("  --destination-ips Comma-separated dest IPs (for direction=out)")
+		fmt.Println("  --port            Port or port range (required for tcp/udp)")
+		fmt.Println("  --action          accept or discard (default: accept)")
+		fmt.Println("  --name            Rule name")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	direction := parseFlagString(os.Args, "--direction")
+	protocol := parseFlagString(os.Args, "--protocol")
+	action := parseFlagString(os.Args, "--action")
+	name := parseFlagString(os.Args, "--name")
+	port := parseFlagString(os.Args, "--port")
+	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
+	destIPs := parseFlagStringSlice(os.Args, "--destination-ips")
+
+	if direction == "" {
+		return fmt.Errorf("--direction is required")
+	}
+	if protocol == "" {
+		return fmt.Errorf("--protocol is required")
+	}
+	if name == "" {
+		name = fmt.Sprintf("custom %s rule", protocol)
+	}
+
+	return enhanceAuthError(addRule(ctx, client, serverID, direction, protocol, action, name, sourceIPs, destIPs, port))
+}
+
+func handleDeleteRule(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall delete-rule <server-id> --name <name> | --index <n> [--direction <in|out>]\n\n", os.Args[0])
+		fmt.Println("delete a firewall rule")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --name         Rule name to delete")
+		fmt.Println("  --index        Rule index to delete")
+		fmt.Println("  --direction    in or out (default: in)")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	name := parseFlagString(os.Args, "--name")
+	index := parseFlagInt(os.Args, "--index")
+	direction := parseFlagString(os.Args, "--direction")
+
+	return enhanceAuthError(deleteRule(ctx, client, serverID, name, index, direction))
+}
+
+func handleListRules(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall list-rules <server-id> [--direction <in|out>] [--output json]\n\n", os.Args[0])
+		fmt.Println("list firewall rules")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --direction    Filter by direction (in or out)")
+		fmt.Println("  --output       Output format (json)")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	direction := parseFlagString(os.Args, "--direction")
+	outputFormat := parseFlagString(os.Args, "--output")
+
+	return enhanceAuthError(listRules(ctx, client, serverID, direction, outputFormat))
+}
+
+// Phase 3 template command handlers.
+func handleTemplateCommand(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall template <subcommand>\n\n", os.Args[0])
+		fmt.Println("Subcommands:")
+		fmt.Println("  list [--output json]")
+		fmt.Println("  describe <template-id> [--output json]")
+		fmt.Println("  apply <server-id> <template-id>")
+		fmt.Println("  create --name <name> [options]")
+		fmt.Println("  delete <template-id> --confirm")
+		return nil
+	}
+
+	subcommand := os.Args[3]
+	switch subcommand {
+	case "list":
+		outputFormat := parseFlagString(os.Args, "--output")
+		return enhanceAuthError(listTemplates(ctx, client, outputFormat))
+
+	case "describe":
+		if len(os.Args) < 5 {
+			fmt.Printf("Usage: %s firewall template describe <template-id> [--output json]\n", os.Args[0])
+			return nil
+		}
+		templateID, err := strconv.Atoi(os.Args[4])
+		if err != nil {
+			return fmt.Errorf("invalid template ID: %s", os.Args[4])
+		}
+		outputFormat := parseFlagString(os.Args, "--output")
+		return enhanceAuthError(describeTemplate(ctx, client, templateID, outputFormat))
+
+	case "apply":
+		if len(os.Args) < 6 {
+			fmt.Printf("Usage: %s firewall template apply <server-id> <template-id>\n", os.Args[0])
+			return nil
+		}
+		serverID, err := parseServerID(os.Args[4])
+		if err != nil {
+			return err
+		}
+		templateID, err := strconv.Atoi(os.Args[5])
+		if err != nil {
+			return fmt.Errorf("invalid template ID: %s", os.Args[5])
+		}
+		return enhanceAuthError(applyTemplate(ctx, client, serverID, templateID))
+
+	case "create":
+		name := parseFlagString(os.Args, "--name")
+		if name == "" {
+			return fmt.Errorf("--name is required")
+		}
+		fromServerID := parseFlagInt(os.Args, "--from-server")
+		rulesFile := parseFlagString(os.Args, "--rules-file")
+		whitelistHOS := parseFlagBool(os.Args, "--whitelist-hos")
+		filterIPv6 := parseFlagBool(os.Args, "--filter-ipv6")
+
+		return enhanceAuthError(createTemplate(ctx, client, name, hrobot.ServerID(fromServerID), rulesFile, whitelistHOS, filterIPv6))
+
+	case "delete":
+		if len(os.Args) < 5 {
+			fmt.Printf("Usage: %s firewall template delete <template-id> --confirm\n", os.Args[0])
+			return nil
+		}
+		templateID, err := strconv.Atoi(os.Args[4])
+		if err != nil {
+			return fmt.Errorf("invalid template ID: %s", os.Args[4])
+		}
+		confirm := parseFlagBool(os.Args, "--confirm")
+		return enhanceAuthError(deleteTemplate(ctx, client, templateID, confirm))
+
+	default:
+		return fmt.Errorf("unknown template subcommand: %s", subcommand)
+	}
+}
+
+// Phase 4 status management command handlers.
+func handleEnableFirewall(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall enable <server-id> [--filter-ipv6=true|false]\n\n", os.Args[0])
+		fmt.Println("enable firewall")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --filter-ipv6=true|false    Enable or disable IPv6 filtering (optional)")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	// Parse --filter-ipv6 flag
+	var filterIPv6 *bool
+	filterIPv6Str := parseFlagString(os.Args, "--filter-ipv6")
+	if filterIPv6Str != "" {
+		val, err := strconv.ParseBool(filterIPv6Str)
+		if err != nil {
+			return fmt.Errorf("invalid --filter-ipv6 value: %s (must be 'true' or 'false')", filterIPv6Str)
+		}
+		filterIPv6 = &val
+	}
+
+	return enhanceAuthError(enableFirewall(ctx, client, serverID, filterIPv6))
+}
+
+func handleDisableFirewall(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall disable <server-id>\n\n", os.Args[0])
+		fmt.Println("disable firewall")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	return enhanceAuthError(disableFirewall(ctx, client, serverID))
+}
+
+func handleFirewallStatus(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall status <server-id>\n\n", os.Args[0])
+		fmt.Println("show firewall status")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	return enhanceAuthError(getFirewallStatus(ctx, client, serverID))
+}
+
+func handleWaitFirewall(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall wait <server-id>\n\n", os.Args[0])
+		fmt.Println("wait for firewall to be ready")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	return enhanceAuthError(waitForFirewall(ctx, client, serverID))
+}
+
+func handleResetFirewall(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall reset <server-id> --confirm\n\n", os.Args[0])
+		fmt.Println("reset firewall (delete all rules)")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --confirm      Required confirmation flag")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	confirm := parseFlagBool(os.Args, "--confirm")
+
+	return enhanceAuthError(resetFirewall(ctx, client, serverID, confirm))
 }
 
 // handleSSHKeyCommand handles all ssh-key-related subcommands.
@@ -995,22 +1597,39 @@ func handleContextCommand() error {
 
 	case "create":
 		if len(os.Args) < 4 {
-			return fmt.Errorf("usage: %s context create <name> --username <username> --password <password>", os.Args[0])
+			return fmt.Errorf("usage: %s context create <name> [--username <username>] [--password <password>]", os.Args[0])
 		}
 		name := os.Args[3]
 
-		var username, password string
-		for i := 4; i < len(os.Args); i++ {
-			arg := os.Args[i]
-			if len(arg) > 11 && arg[:11] == "--username=" {
-				username = arg[11:]
-			} else if len(arg) > 11 && arg[:11] == "--password=" {
-				password = arg[11:]
+		// Use centralized flag parsing that handles both --flag=value and --flag value
+		username := parseFlagString(os.Args, "--username")
+		password := parseFlagString(os.Args, "--password")
+
+		// Prompt for missing credentials
+		reader := bufio.NewReader(os.Stdin)
+
+		if username == "" {
+			fmt.Print("Enter username (e.g., #ws+XXXXXXX): ")
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read username: %w", err)
+			}
+			username = strings.TrimSpace(input)
+			if username == "" {
+				return fmt.Errorf("username cannot be empty")
 			}
 		}
 
-		if username == "" || password == "" {
-			return fmt.Errorf("both --username and --password are required")
+		if password == "" {
+			fmt.Print("Enter password: ")
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read password: %w", err)
+			}
+			password = strings.TrimSpace(input)
+			if password == "" {
+				return fmt.Errorf("password cannot be empty")
+			}
 		}
 
 		return createContext(name, username, password)
