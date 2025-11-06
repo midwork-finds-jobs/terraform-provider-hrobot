@@ -644,13 +644,85 @@ func handleVSwitchCommand(ctx context.Context, client *hrobot.Client) error {
 // handleAuctionCommand handles all auction-related subcommands.
 func handleAuctionCommand(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 3 {
-		return fmt.Errorf("usage: %s auction <subcommand>\nSubcommands:\n  list                - List available auction servers\n  order <product-id>  - Order a server from auction", os.Args[0])
+		return fmt.Errorf("usage: %s auction <subcommand>\nSubcommands:\n  list                 - List available auction servers\n  describe <server-id> - Show details about a specific auction server\n  order <product-id>   - Order a server from auction", os.Args[0])
 	}
 
 	subcommand := os.Args[2]
 	switch subcommand {
 	case "list":
-		return enhanceOrderingAuthError(ctx, client, listAuctionServers(ctx, client))
+		if isHelpRequested() {
+			fmt.Printf("Usage: %s auction list [--location=<location>] [--memory-min=<gb>] [--cpu=<type>] [--cpu-benchmark-min=<score>] [--disk-space-min=<gb>] [--price-max=<euros>] [--gpu]\n\n", os.Args[0])
+			fmt.Println("List available auction servers with optional filters.")
+			fmt.Println("\nFlags:")
+			fmt.Println("  --location=<loc>            Filter by location (e.g., HEL, FSN, NBG)")
+			fmt.Println("  --memory-min=<gb>           Minimum memory in GB (e.g., 128)")
+			fmt.Println("  --cpu=<type>                Filter by CPU vendor (amd or intel)")
+			fmt.Println("  --cpu-benchmark-min=<score> Minimum CPU benchmark score (e.g., 10000)")
+			fmt.Println("  --disk-space-min=<gb>       Minimum disk space in GB (e.g., 7000)")
+			fmt.Println("  --price-max=<euros>         Maximum monthly price in euros (e.g., 200)")
+			fmt.Println("  --gpu                       Show only servers with GPU")
+			return nil
+		}
+
+		// Parse filter flags
+		var location string
+		var memoryMin float64
+		var cpu string
+		var cpuBenchmarkMin uint32
+		var diskSpaceMin float64
+		var priceMax float64
+		var gpuOnly bool
+
+		for i := 3; i < len(os.Args); i++ {
+			arg := os.Args[i]
+			if arg == "--gpu" {
+				gpuOnly = true
+			} else if len(arg) > 11 && arg[:11] == "--location=" {
+				location = arg[11:]
+			} else if len(arg) > 13 && arg[:13] == "--memory-min=" {
+				val, err := strconv.ParseFloat(arg[13:], 64)
+				if err != nil {
+					return fmt.Errorf("invalid memory-min value: %s", arg[13:])
+				}
+				memoryMin = val
+			} else if len(arg) > 6 && arg[:6] == "--cpu=" {
+				cpu = arg[6:]
+			} else if len(arg) > 20 && arg[:20] == "--cpu-benchmark-min=" {
+				val, err := strconv.ParseUint(arg[20:], 10, 32)
+				if err != nil {
+					return fmt.Errorf("invalid cpu-benchmark-min value: %s", arg[20:])
+				}
+				cpuBenchmarkMin = uint32(val)
+			} else if len(arg) > 17 && arg[:17] == "--disk-space-min=" {
+				val, err := strconv.ParseFloat(arg[17:], 64)
+				if err != nil {
+					return fmt.Errorf("invalid disk-space-min value: %s", arg[17:])
+				}
+				diskSpaceMin = val
+			} else if len(arg) > 12 && arg[:12] == "--price-max=" {
+				val, err := strconv.ParseFloat(arg[12:], 64)
+				if err != nil {
+					return fmt.Errorf("invalid price-max value: %s", arg[12:])
+				}
+				priceMax = val
+			}
+		}
+
+		return enhanceOrderingAuthError(ctx, client, listAuctionServers(ctx, client, location, memoryMin, cpu, cpuBenchmarkMin, diskSpaceMin, priceMax, gpuOnly))
+
+	case "describe":
+		if isHelpRequested() || len(os.Args) < 4 {
+			fmt.Printf("Usage: %s auction describe <server-id>\n\n", os.Args[0])
+			fmt.Println("Show detailed information about a specific auction server.")
+			fmt.Println("\nArguments:")
+			fmt.Println("  <server-id>   The auction server ID")
+			return nil
+		}
+		serverID, err := strconv.ParseUint(os.Args[3], 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid server ID: %s", os.Args[3])
+		}
+		return describeAuctionServer(ctx, client, uint32(serverID))
 
 	case "order":
 		if isHelpRequested() || len(os.Args) < 4 {
@@ -710,20 +782,89 @@ func handleAuctionCommand(ctx context.Context, client *hrobot.Client) error {
 		return enhanceOrderingAuthError(ctx, client, orderMarketServer(ctx, client, uint32(productID), sshKeyFingerprints, testMode, skipConfirmation))
 
 	default:
-		return fmt.Errorf("unknown auction subcommand: %s\nSubcommands:\n  list                - List available auction servers\n  order <product-id>  - Order a server from auction", subcommand)
+		return fmt.Errorf("unknown auction subcommand: %s\nSubcommands:\n  list                 - List available auction servers\n  describe <server-id> - Show details about a specific auction server\n  order <product-id>   - Order a server from auction", subcommand)
 	}
 }
 
 // handleProductCommand handles all product-related subcommands.
 func handleProductCommand(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 3 {
-		return fmt.Errorf("usage: %s product <subcommand>\nSubcommands:\n  list                - List available product servers\n  order <product-id>  - Order a product server", os.Args[0])
+		return fmt.Errorf("usage: %s product <subcommand>\nSubcommands:\n  list                  - List available product servers\n  describe <product-id> - Show details about a specific product\n  order <product-id>    - Order a product server", os.Args[0])
 	}
 
 	subcommand := os.Args[2]
 	switch subcommand {
 	case "list":
-		return enhanceOrderingAuthError(ctx, client, listProducts(ctx, client))
+		if isHelpRequested() {
+			fmt.Printf("Usage: %s product list [--location=<location>] [--memory-min=<gb>] [--cpu=<type>] [--cpu-benchmark-min=<score>] [--disk-space-min=<gb>] [--price-max=<euros>] [--gpu]\n\n", os.Args[0])
+			fmt.Println("List available product servers with optional filters.")
+			fmt.Println("\nFlags:")
+			fmt.Println("  --location=<loc>            Filter by location (e.g., HEL, FSN, NBG)")
+			fmt.Println("  --memory-min=<gb>           Minimum memory in GB (e.g., 128)")
+			fmt.Println("  --cpu=<type>                Filter by CPU vendor (amd or intel)")
+			fmt.Println("  --cpu-benchmark-min=<score> Minimum CPU benchmark score (e.g., 10000)")
+			fmt.Println("  --disk-space-min=<gb>       Minimum disk space in GB (e.g., 7000)")
+			fmt.Println("  --price-max=<euros>         Maximum monthly price in euros (e.g., 200)")
+			fmt.Println("  --gpu                       Show only servers with GPU")
+			return nil
+		}
+
+		// Parse filter flags
+		var location string
+		var memoryMin float64
+		var cpu string
+		var cpuBenchmarkMin uint32
+		var diskSpaceMin float64
+		var priceMax float64
+		var gpuOnly bool
+
+		for i := 3; i < len(os.Args); i++ {
+			arg := os.Args[i]
+			if arg == "--gpu" {
+				gpuOnly = true
+			} else if len(arg) > 11 && arg[:11] == "--location=" {
+				location = arg[11:]
+			} else if len(arg) > 13 && arg[:13] == "--memory-min=" {
+				val, err := strconv.ParseFloat(arg[13:], 64)
+				if err != nil {
+					return fmt.Errorf("invalid memory-min value: %s", arg[13:])
+				}
+				memoryMin = val
+			} else if len(arg) > 6 && arg[:6] == "--cpu=" {
+				cpu = arg[6:]
+			} else if len(arg) > 20 && arg[:20] == "--cpu-benchmark-min=" {
+				val, err := strconv.ParseUint(arg[20:], 10, 32)
+				if err != nil {
+					return fmt.Errorf("invalid cpu-benchmark-min value: %s", arg[20:])
+				}
+				cpuBenchmarkMin = uint32(val)
+			} else if len(arg) > 17 && arg[:17] == "--disk-space-min=" {
+				val, err := strconv.ParseFloat(arg[17:], 64)
+				if err != nil {
+					return fmt.Errorf("invalid disk-space-min value: %s", arg[17:])
+				}
+				diskSpaceMin = val
+			} else if len(arg) > 12 && arg[:12] == "--price-max=" {
+				val, err := strconv.ParseFloat(arg[12:], 64)
+				if err != nil {
+					return fmt.Errorf("invalid price-max value: %s", arg[12:])
+				}
+				priceMax = val
+			}
+		}
+
+		return enhanceOrderingAuthError(ctx, client, listProducts(ctx, client, location, memoryMin, cpu, cpuBenchmarkMin, diskSpaceMin, priceMax, gpuOnly))
+
+	case "describe":
+		if isHelpRequested() || len(os.Args) < 4 {
+			fmt.Printf("Usage: %s product describe <product-id>\n\n", os.Args[0])
+			fmt.Println("Show detailed information about a specific product.")
+			fmt.Println("\nArguments:")
+			fmt.Println("  <product-id>   The product ID (e.g., EX44, AX41-NVMe)")
+			return nil
+		}
+		productID := os.Args[3]
+		return describeProduct(ctx, client, productID)
 
 	case "order":
 		if isHelpRequested() || len(os.Args) < 4 {
@@ -782,6 +923,6 @@ func handleProductCommand(ctx context.Context, client *hrobot.Client) error {
 		return enhanceOrderingAuthError(ctx, client, orderProductServer(ctx, client, productID, location, sshKeyFingerprints, testMode, skipConfirmation))
 
 	default:
-		return fmt.Errorf("unknown product subcommand: %s\nSubcommands:\n  list                - List available product servers\n  order <product-id>  - Order a product server", subcommand)
+		return fmt.Errorf("unknown product subcommand: %s\nSubcommands:\n  list                  - List available product servers\n  describe <product-id> - Show details about a specific product\n  order <product-id>    - Order a product server", subcommand)
 	}
 }
