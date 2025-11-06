@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -122,6 +123,27 @@ func addFirewallRules(ctx context.Context, client *hrobot.Client, serverID hrobo
 	// Filter out auto-added mail rules from existing rules before sending update
 	filteredInput := filterAutoAddedRules(fw.Rules.Input)
 
+	// Check if adding new rules would exceed the 10 rule limit
+	const maxFirewallRules = 10
+	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+	if totalRulesAfter > maxFirewallRules {
+		return nil, fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
+
+Current rules: %d
+Trying to add: %d
+Total would be: %d
+Maximum allowed: %d inbound rules
+
+To resolve this:
+  1. List existing rules: hrobot firewall list-rules %d
+  2. Delete %d rule(s) you don't need: hrobot firewall delete-rule %d --index <N>
+  3. Try adding your rules again
+
+Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
+			len(rulesToAdd), len(filteredInput), len(rulesToAdd), totalRulesAfter, maxFirewallRules,
+			serverID, totalRulesAfter-maxFirewallRules, serverID)
+	}
+
 	// Add new rules to the beginning of input rules
 	updatedRules := append(rulesToAdd, filteredInput...)
 
@@ -137,6 +159,24 @@ func addFirewallRules(ctx context.Context, client *hrobot.Client, serverID hrobo
 
 	_, err = client.Firewall.Update(ctx, serverID, updateConfig)
 	if err != nil {
+		// Check if this is a rule limit error
+		var hrobotErr *hrobot.Error
+		if errors.As(err, &hrobotErr) && hrobot.IsFirewallRuleLimitExceededError(hrobotErr) {
+			currentCount := len(fw.Rules.Input)
+			return nil, fmt.Errorf(`firewall rule limit exceeded
+
+Current rules: %d
+Trying to add: %d
+Maximum allowed: 10 inbound rules
+
+To resolve this:
+  1. List existing rules: hrobot firewall list-rules %d
+  2. Delete rules you don't need: hrobot firewall delete-rule %d --index <N>
+  3. Try adding your rules again
+
+Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
+				currentCount, len(rulesToAdd), serverID, serverID)
+		}
 		return nil, fmt.Errorf("failed to update firewall: %w", err)
 	}
 

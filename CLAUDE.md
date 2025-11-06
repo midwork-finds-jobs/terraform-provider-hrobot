@@ -148,6 +148,24 @@ tofu -chdir=./some/path/
 **IMPORTANT:** Do this for `tofu validate` and `tofu init` and `tofu plan`
 and all tofu commands.
 
+## Hetzner API Limitations
+
+### Firewall Rules
+
+**IMPORTANT: Hetzner enforces a maximum of 10 inbound firewall rules per server.**
+
+When this limit is reached, the API returns:
+
+- Status: 409
+- Code: `FIREWALL_RULE_LIMIT_EXCEEDED`
+- Description: "The firewall rule limit is exceeded"
+
+The CLI should detect this error and provide helpful guidance to the user about:
+
+1. The current number of rules
+2. How to list existing rules (`hrobot firewall list-rules <server-id>`)
+3. How to delete rules to make room (`hrobot firewall delete-rule <server-id> --index <N>`)
+
 ## Included CLI tool `hrobot`
 
 Use separate subcommands for the different features:

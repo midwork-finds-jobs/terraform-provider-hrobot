@@ -185,3 +185,8 @@ func IsFirewallInProcessError(err error) bool {
 func IsUnauthorizedError(err error) bool {
 	return IsAPIError(err, ErrUnauthorized)
 }
+
+// IsFirewallRuleLimitExceededError checks if the error is a firewall rule limit exceeded error.
+func IsFirewallRuleLimitExceededError(err error) bool {
+	return IsAPIError(err, ErrFirewallRuleLimitExceeded)
+}
