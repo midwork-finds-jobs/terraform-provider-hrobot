@@ -28,10 +28,11 @@ vendor/
 # Don't push claude permissions
 .claude
 
-# The compiled binaries (in root directory only)
+# The compiled binaries
 /hrobot
 /terraform-provider-hrobot
+/cmd/hrobot/terraform-provider-hrobot
 
-# Helper to create the initial gpg signing keys
+# Don't store the secrets
 keys/*
 !keys/setup-gpg-secrets.sh
