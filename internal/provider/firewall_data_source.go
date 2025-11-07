@@ -31,6 +31,7 @@ type FirewallDataSourceModel struct {
 	ServerIP                 types.String        `tfsdk:"server_ip"`
 	Status                   types.String        `tfsdk:"status"`
 	WhitelistHetznerServices types.Bool          `tfsdk:"whitelist_hetzner_services"`
+	FilterIPv6               types.Bool          `tfsdk:"filter_ipv6"`
 	Port                     types.String        `tfsdk:"port"`
 	InputRules               []FirewallRuleModel `tfsdk:"input_rules"`
 	OutputRules              []FirewallRuleModel `tfsdk:"output_rules"`
@@ -60,6 +61,10 @@ func (d *FirewallDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			},
 			"whitelist_hetzner_services": schema.BoolAttribute{
 				MarkdownDescription: "Whether Hetzner services are whitelisted",
+				Computed:            true,
+			},
+			"filter_ipv6": schema.BoolAttribute{
+				MarkdownDescription: "Whether IPv6 packet filtering is enabled",
 				Computed:            true,
 			},
 			"port": schema.StringAttribute{
@@ -208,6 +213,7 @@ func (d *FirewallDataSource) Read(ctx context.Context, req datasource.ReadReques
 	data.ServerID = types.Int64Value(int64(firewallConfig.ServerNumber))
 	data.Status = types.StringValue(string(firewallConfig.Status))
 	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
+	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
 	data.Port = types.StringValue(firewallConfig.Port)
 
 	// Convert input rules from API response

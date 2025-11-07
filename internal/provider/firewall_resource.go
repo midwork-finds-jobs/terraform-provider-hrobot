@@ -37,6 +37,7 @@ type FirewallResourceModel struct {
 	ServerID                 types.Int64         `tfsdk:"server_id"`
 	Status                   types.String        `tfsdk:"status"`
 	WhitelistHetznerServices types.Bool          `tfsdk:"whitelist_hetzner_services"`
+	FilterIPv6               types.Bool          `tfsdk:"filter_ipv6"`
 	TemplateID               types.String        `tfsdk:"template_id"`
 	InputRules               []FirewallRuleModel `tfsdk:"input_rules"`
 	OutputRules              []FirewallRuleModel `tfsdk:"output_rules"`
@@ -81,6 +82,12 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
+			},
+			"filter_ipv6": schema.BoolAttribute{
+				MarkdownDescription: "enable ipv6 packet filtering. when enabled, the firewall will also filter ipv6 packets according to the configured rules.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 			"template_id": schema.StringAttribute{
 				MarkdownDescription: "firewall template id to apply. when set, this will apply the template rules to the server. cannot be used together with input_rules/output_rules. the whitelist_hetzner_services setting comes from the template.",
@@ -240,6 +247,7 @@ func (r *FirewallResource) Create(ctx context.Context, req resource.CreateReques
 		updateConfig := hrobot.UpdateConfig{
 			Status:       hrobot.FirewallStatusActive, // Always set to active when applying configuration
 			WhitelistHOS: data.WhitelistHetznerServices.ValueBool(),
+			FilterIPv6:   data.FilterIPv6.ValueBool(),
 		}
 
 		// Convert input rules
@@ -271,6 +279,7 @@ func (r *FirewallResource) Create(ctx context.Context, req resource.CreateReques
 	data.ServerID = types.Int64Value(int64(firewallConfig.ServerNumber))
 	data.Status = types.StringValue(string(firewallConfig.Status))
 	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
+	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
 
 	// Write logs using the tflog package
 	tflog.Trace(ctx, "created a firewall resource")
@@ -303,6 +312,7 @@ func (r *FirewallResource) Read(ctx context.Context, req resource.ReadRequest, r
 	data.ServerID = types.Int64Value(int64(firewallConfig.ServerNumber))
 	data.Status = types.StringValue(string(firewallConfig.Status))
 	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
+	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
 
 	// Only update rules if not using template_id
 	// When using template_id, rules come from the template and should not be stored in state
@@ -371,6 +381,7 @@ func (r *FirewallResource) Update(ctx context.Context, req resource.UpdateReques
 		updateConfig := hrobot.UpdateConfig{
 			Status:       hrobot.FirewallStatusActive, // Always set to active when applying configuration
 			WhitelistHOS: data.WhitelistHetznerServices.ValueBool(),
+			FilterIPv6:   data.FilterIPv6.ValueBool(),
 		}
 
 		// Convert input rules
@@ -400,6 +411,7 @@ func (r *FirewallResource) Update(ctx context.Context, req resource.UpdateReques
 	// Update model with response data
 	data.Status = types.StringValue(string(firewallConfig.Status))
 	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
+	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
