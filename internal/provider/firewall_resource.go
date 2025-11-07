@@ -274,12 +274,17 @@ func (r *FirewallResource) Create(ctx context.Context, req resource.CreateReques
 		}
 	}
 
+	// Save plan values before updating from API response
+	planWhitelistHetznerServices := data.WhitelistHetznerServices
+	planFilterIPv6 := data.FilterIPv6
+
 	// Update model with response data
 	data.ID = types.StringValue(strconv.Itoa(firewallConfig.ServerNumber))
 	data.ServerID = types.Int64Value(int64(firewallConfig.ServerNumber))
 	data.Status = types.StringValue(string(firewallConfig.Status))
-	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
-	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
+	// Preserve plan values - don't overwrite with template settings
+	data.WhitelistHetznerServices = planWhitelistHetznerServices
+	data.FilterIPv6 = planFilterIPv6
 
 	// Write logs using the tflog package
 	tflog.Trace(ctx, "created a firewall resource")
@@ -308,11 +313,16 @@ func (r *FirewallResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
+	// Save state values before updating
+	stateWhitelistHetznerServices := data.WhitelistHetznerServices
+	stateFilterIPv6 := data.FilterIPv6
+
 	// Update model with current data
 	data.ServerID = types.Int64Value(int64(firewallConfig.ServerNumber))
 	data.Status = types.StringValue(string(firewallConfig.Status))
-	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
-	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
+	// Preserve state values - don't overwrite with API values (which may come from template)
+	data.WhitelistHetznerServices = stateWhitelistHetznerServices
+	data.FilterIPv6 = stateFilterIPv6
 
 	// Only update rules if not using template_id
 	// When using template_id, rules come from the template and should not be stored in state
@@ -408,10 +418,15 @@ func (r *FirewallResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 	}
 
+	// Save plan values before updating from API response
+	planWhitelistHetznerServices := data.WhitelistHetznerServices
+	planFilterIPv6 := data.FilterIPv6
+
 	// Update model with response data
 	data.Status = types.StringValue(string(firewallConfig.Status))
-	data.WhitelistHetznerServices = types.BoolValue(firewallConfig.WhitelistHOS)
-	data.FilterIPv6 = types.BoolValue(firewallConfig.FilterIPv6)
+	// Preserve plan values - don't overwrite with template settings
+	data.WhitelistHetznerServices = planWhitelistHetznerServices
+	data.FilterIPv6 = planFilterIPv6
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

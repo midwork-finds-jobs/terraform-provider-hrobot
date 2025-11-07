@@ -19,8 +19,8 @@
   '';
 
   scripts.build-all.exec = ''
-    go build -v -o terraform-provider-hrobot
-    go build -v -o hrobot ./cmd/hrobot
+    go build -C ${config.git.root} -v -o terraform-provider-hrobot
+    go build -C ${config.git.root} -v -o hrobot ${config.git.root}/cmd/hrobot
   '';
 
   packages = with pkgs; [

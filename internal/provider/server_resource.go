@@ -431,27 +431,23 @@ func (r *ServerResource) Read(ctx context.Context, req resource.ReadRequest, res
 			state.ServerName = types.StringValue(server.ServerName)
 			state.Status = types.StringValue(string(server.Status))
 
-			// Update public_net block
-			if state.PublicNet == nil {
-				state.PublicNet = &PublicNetModel{
-					IPv4Enabled: types.BoolValue(server.ServerIP != nil),
+			// Only update public_net if it's already in the state (i.e., user configured it)
+			if state.PublicNet != nil {
+				// Set IPv4 if available
+				if server.ServerIP != nil {
+					state.PublicNet.IPv4 = types.StringValue(server.ServerIP.String())
+				} else {
+					state.PublicNet.IPv4 = types.StringNull()
 				}
-			}
 
-			// Set IPv4 if available
-			if server.ServerIP != nil {
-				state.PublicNet.IPv4 = types.StringValue(server.ServerIP.String())
-			} else {
-				state.PublicNet.IPv4 = types.StringNull()
-			}
-
-			// IPv6 is always enabled - fetch from subnets
-			if len(server.Subnet) > 0 {
-				for _, subnet := range server.Subnet {
-					// Look for IPv6 subnet
-					if subnet.IP.To4() == nil {
-						state.PublicNet.IPv6 = types.StringValue(subnet.IP.String() + "/" + subnet.Mask)
-						break
+				// IPv6 is always enabled - fetch from subnets
+				if len(server.Subnet) > 0 {
+					for _, subnet := range server.Subnet {
+						// Look for IPv6 subnet
+						if subnet.IP.To4() == nil {
+							state.PublicNet.IPv6 = types.StringValue(subnet.IP.String() + "/" + subnet.Mask)
+							break
+						}
 					}
 				}
 			}
@@ -538,27 +534,23 @@ func (r *ServerResource) Update(ctx context.Context, req resource.UpdateRequest,
 		if err == nil && server != nil {
 			plan.ServerName = types.StringValue(server.ServerName)
 
-			// Update public_net block
-			if plan.PublicNet == nil {
-				plan.PublicNet = &PublicNetModel{
-					IPv4Enabled: types.BoolValue(server.ServerIP != nil),
+			// Only update public_net if it's already in the plan (i.e., user configured it)
+			if plan.PublicNet != nil {
+				// Set IPv4 if available
+				if server.ServerIP != nil {
+					plan.PublicNet.IPv4 = types.StringValue(server.ServerIP.String())
+				} else {
+					plan.PublicNet.IPv4 = types.StringNull()
 				}
-			}
 
-			// Set IPv4 if available
-			if server.ServerIP != nil {
-				plan.PublicNet.IPv4 = types.StringValue(server.ServerIP.String())
-			} else {
-				plan.PublicNet.IPv4 = types.StringNull()
-			}
-
-			// IPv6 is always enabled - fetch from subnets
-			if len(server.Subnet) > 0 {
-				for _, subnet := range server.Subnet {
-					// Look for IPv6 subnet
-					if subnet.IP.To4() == nil {
-						plan.PublicNet.IPv6 = types.StringValue(subnet.IP.String() + "/" + subnet.Mask)
-						break
+				// IPv6 is always enabled - fetch from subnets
+				if len(server.Subnet) > 0 {
+					for _, subnet := range server.Subnet {
+						// Look for IPv6 subnet
+						if subnet.IP.To4() == nil {
+							plan.PublicNet.IPv6 = types.StringValue(subnet.IP.String() + "/" + subnet.Mask)
+							break
+						}
 					}
 				}
 			}
@@ -628,31 +620,13 @@ func (r *ServerResource) ImportState(ctx context.Context, req resource.ImportSta
 			// Set to indicate this was imported directly from server (no transaction)
 			state.TransactionID = types.StringValue(fmt.Sprintf("server-%d", server.ServerNumber))
 			state.Status = types.StringValue(string(server.Status))
-			state.ServerType = types.StringValue(server.Product)
+			state.ServerType = types.StringValue(normalizeServerType(server.Product))
 			state.WaitForComplete = types.BoolValue(true)
+			// Set default image to "Rescue system" as we don't know what was originally used
+			state.Image = types.StringValue("Rescue system")
 
-			// Initialize public_net block
-			state.PublicNet = &PublicNetModel{
-				IPv4Enabled: types.BoolValue(server.ServerIP != nil),
-			}
-
-			// Set IPv4 if available
-			if server.ServerIP != nil {
-				state.PublicNet.IPv4 = types.StringValue(server.ServerIP.String())
-			} else {
-				state.PublicNet.IPv4 = types.StringNull()
-			}
-
-			// IPv6 is always enabled - fetch from subnets
-			if len(server.Subnet) > 0 {
-				for _, subnet := range server.Subnet {
-					// Look for IPv6 subnet
-					if subnet.IP.To4() == nil {
-						state.PublicNet.IPv6 = types.StringValue(subnet.IP.String() + "/" + subnet.Mask)
-						break
-					}
-				}
-			}
+			// Note: We don't populate public_net during import.
+			// Users should add it to their config if they want to track IP addresses.
 
 			// Save to state
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -692,4 +666,14 @@ func (r *ServerResource) ImportState(ctx context.Context, req resource.ImportSta
 
 	// Save to state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// normalizeServerType normalizes server type values to lowercase "auction" for consistency.
+// The API may return "Server Auction", "Auction", or "auction" - we normalize to "auction".
+func normalizeServerType(serverType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(serverType))
+	if normalized == "server auction" || normalized == "auction" {
+		return "auction"
+	}
+	return normalized
 }

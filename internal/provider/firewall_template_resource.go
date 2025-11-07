@@ -7,12 +7,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
@@ -84,6 +86,10 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 			"input_rules": schema.ListNestedAttribute{
 				MarkdownDescription: "Input firewall rules",
 				Optional:            true,
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(10),
+					FirewallRuleProtocolValidator(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -128,6 +134,10 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 			"output_rules": schema.ListNestedAttribute{
 				MarkdownDescription: "Output firewall rules",
 				Optional:            true,
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(10),
+					FirewallRuleProtocolValidator(),
+				},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -199,6 +209,46 @@ func (r *FirewallTemplateResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
+	// Validate rule count - Hetzner enforces a maximum of 10 firewall rules
+	if len(data.InputRules) > 10 {
+		resp.Diagnostics.AddError(
+			"Too many input firewall rules",
+			fmt.Sprintf("Hetzner enforces a maximum of 10 input firewall rules per server. You have configured %d rules. Please reduce the number of input_rules to 10 or fewer.", len(data.InputRules)),
+		)
+		return
+	}
+	if len(data.OutputRules) > 10 {
+		resp.Diagnostics.AddError(
+			"Too many output firewall rules",
+			fmt.Sprintf("Hetzner enforces a maximum of 10 output firewall rules per server. You have configured %d rules. Please reduce the number of output_rules to 10 or fewer.", len(data.OutputRules)),
+		)
+		return
+	}
+
+	// Validate ip_version requirement - Hetzner API requires ip_version when protocol is specified
+	for i, rule := range data.InputRules {
+		if !rule.Protocol.IsNull() && !rule.Protocol.IsUnknown() && rule.Protocol.ValueString() != "" {
+			if rule.IPVersion.IsNull() || rule.IPVersion.IsUnknown() || rule.IPVersion.ValueString() == "" {
+				resp.Diagnostics.AddError(
+					"Missing ip_version in firewall rule",
+					fmt.Sprintf("Input rule %d ('%s') specifies protocol '%s' but is missing ip_version. According to Hetzner API: 'Without specifying the IP version, it is not possible to filter on a specific protocol.' Please add ip_version='ipv4' or ip_version='ipv6' to this rule.", i+1, rule.Name.ValueString(), rule.Protocol.ValueString()),
+				)
+				return
+			}
+		}
+	}
+	for i, rule := range data.OutputRules {
+		if !rule.Protocol.IsNull() && !rule.Protocol.IsUnknown() && rule.Protocol.ValueString() != "" {
+			if rule.IPVersion.IsNull() || rule.IPVersion.IsUnknown() || rule.IPVersion.ValueString() == "" {
+				resp.Diagnostics.AddError(
+					"Missing ip_version in firewall rule",
+					fmt.Sprintf("Output rule %d ('%s') specifies protocol '%s' but is missing ip_version. According to Hetzner API: 'Without specifying the IP version, it is not possible to filter on a specific protocol.' Please add ip_version='ipv4' or ip_version='ipv6' to this rule.", i+1, rule.Name.ValueString(), rule.Protocol.ValueString()),
+				)
+				return
+			}
+		}
+	}
+
 	// Convert Terraform model to API config
 	templateConfig := hrobot.TemplateConfig{
 		Name:         data.Name.ValueString(),
@@ -210,6 +260,10 @@ func (r *FirewallTemplateResource) Create(ctx context.Context, req resource.Crea
 			Output: convertToAPIRules(data.OutputRules),
 		},
 	}
+
+	// Save the original plan values for rules
+	planInputRules := data.InputRules
+	planOutputRules := data.OutputRules
 
 	// Create template via API
 	template, err := r.client.Firewall.CreateTemplate(ctx, templateConfig)
@@ -227,8 +281,9 @@ func (r *FirewallTemplateResource) Create(ctx context.Context, req resource.Crea
 	data.FilterIPv6 = types.BoolValue(template.FilterIPv6)
 	data.WhitelistHetznerServices = types.BoolValue(template.WhitelistHOS)
 	data.IsDefault = types.BoolValue(template.IsDefault)
-	data.InputRules = convertFromAPIRules(template.Rules.Input)
-	data.OutputRules = convertFromAPIRules(template.Rules.Output)
+	// Preserve the plan values for rules - don't overwrite with API defaults
+	data.InputRules = planInputRules
+	data.OutputRules = planOutputRules
 
 	// Save data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -252,13 +307,19 @@ func (r *FirewallTemplateResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
+	// Save state values before updating
+	stateInputRules := data.InputRules
+	stateOutputRules := data.OutputRules
+
 	// Map response to model
 	data.Name = types.StringValue(template.Name)
 	data.FilterIPv6 = types.BoolValue(template.FilterIPv6)
 	data.WhitelistHetznerServices = types.BoolValue(template.WhitelistHOS)
 	data.IsDefault = types.BoolValue(template.IsDefault)
-	data.InputRules = convertFromAPIRules(template.Rules.Input)
-	data.OutputRules = convertFromAPIRules(template.Rules.Output)
+	// Preserve state values for rules - don't overwrite with API defaults
+	// This means after import, user needs to run apply to sync rules from config
+	data.InputRules = stateInputRules
+	data.OutputRules = stateOutputRules
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -272,6 +333,46 @@ func (r *FirewallTemplateResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
+	// Validate rule count - Hetzner enforces a maximum of 10 firewall rules
+	if len(data.InputRules) > 10 {
+		resp.Diagnostics.AddError(
+			"Too many input firewall rules",
+			fmt.Sprintf("Hetzner enforces a maximum of 10 input firewall rules per server. You have configured %d rules. Please reduce the number of input_rules to 10 or fewer.", len(data.InputRules)),
+		)
+		return
+	}
+	if len(data.OutputRules) > 10 {
+		resp.Diagnostics.AddError(
+			"Too many output firewall rules",
+			fmt.Sprintf("Hetzner enforces a maximum of 10 output firewall rules per server. You have configured %d rules. Please reduce the number of output_rules to 10 or fewer.", len(data.OutputRules)),
+		)
+		return
+	}
+
+	// Validate ip_version requirement - Hetzner API requires ip_version when protocol is specified
+	for i, rule := range data.InputRules {
+		if !rule.Protocol.IsNull() && !rule.Protocol.IsUnknown() && rule.Protocol.ValueString() != "" {
+			if rule.IPVersion.IsNull() || rule.IPVersion.IsUnknown() || rule.IPVersion.ValueString() == "" {
+				resp.Diagnostics.AddError(
+					"Missing ip_version in firewall rule",
+					fmt.Sprintf("Input rule %d ('%s') specifies protocol '%s' but is missing ip_version. According to Hetzner API: 'Without specifying the IP version, it is not possible to filter on a specific protocol.' Please add ip_version='ipv4' or ip_version='ipv6' to this rule.", i+1, rule.Name.ValueString(), rule.Protocol.ValueString()),
+				)
+				return
+			}
+		}
+	}
+	for i, rule := range data.OutputRules {
+		if !rule.Protocol.IsNull() && !rule.Protocol.IsUnknown() && rule.Protocol.ValueString() != "" {
+			if rule.IPVersion.IsNull() || rule.IPVersion.IsUnknown() || rule.IPVersion.ValueString() == "" {
+				resp.Diagnostics.AddError(
+					"Missing ip_version in firewall rule",
+					fmt.Sprintf("Output rule %d ('%s') specifies protocol '%s' but is missing ip_version. According to Hetzner API: 'Without specifying the IP version, it is not possible to filter on a specific protocol.' Please add ip_version='ipv4' or ip_version='ipv6' to this rule.", i+1, rule.Name.ValueString(), rule.Protocol.ValueString()),
+				)
+				return
+			}
+		}
+	}
+
 	// Convert Terraform model to API config
 	templateConfig := hrobot.TemplateConfig{
 		Name:         data.Name.ValueString(),
@@ -283,6 +384,10 @@ func (r *FirewallTemplateResource) Update(ctx context.Context, req resource.Upda
 			Output: convertToAPIRules(data.OutputRules),
 		},
 	}
+
+	// Save the original plan values for rules
+	planInputRules := data.InputRules
+	planOutputRules := data.OutputRules
 
 	// Update template via API
 	template, err := r.client.Firewall.UpdateTemplate(ctx, data.ID.ValueString(), templateConfig)
@@ -299,8 +404,9 @@ func (r *FirewallTemplateResource) Update(ctx context.Context, req resource.Upda
 	data.FilterIPv6 = types.BoolValue(template.FilterIPv6)
 	data.WhitelistHetznerServices = types.BoolValue(template.WhitelistHOS)
 	data.IsDefault = types.BoolValue(template.IsDefault)
-	data.InputRules = convertFromAPIRules(template.Rules.Input)
-	data.OutputRules = convertFromAPIRules(template.Rules.Output)
+	// Preserve the plan values for rules - don't overwrite with API defaults
+	data.InputRules = planInputRules
+	data.OutputRules = planOutputRules
 
 	// Save updated data into Terraform state
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

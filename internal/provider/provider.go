@@ -95,7 +95,14 @@ func (p *HetznerRobotProvider) Configure(ctx context.Context, req provider.Confi
 	}
 
 	// Create hrobot client
-	client := hrobot.NewClient(username, password)
+	var opts []hrobot.ClientOption
+
+	// Enable debug logging if HROBOT_DEBUG environment variable is set
+	if os.Getenv("HROBOT_DEBUG") != "" {
+		opts = append(opts, hrobot.WithDebug(true))
+	}
+
+	client := hrobot.NewClient(username, password, opts...)
 
 	resp.DataSourceData = client
 	resp.ResourceData = client

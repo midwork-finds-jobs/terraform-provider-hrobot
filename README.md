@@ -116,6 +116,34 @@ export HROBOT_PASSWORD='YYYYYY'
 make testacc
 ```
 
+### Debugging
+
+#### Enable Debug Logging
+
+You can enable verbose HTTP request/response logging for the provider by setting the `HROBOT_DEBUG` environment variable:
+
+```bash
+# Enable debug logging
+export HROBOT_DEBUG=1
+
+# Run OpenTofu/Terraform with debug logging
+tofu apply
+
+# Or for a single command
+HROBOT_DEBUG=1 tofu apply
+```
+
+When enabled, the provider will output detailed information about:
+
+- HTTP request URLs and methods
+- Request headers and body
+- HTTP response status codes
+- Response headers and body
+
+This is useful for troubleshooting API issues or understanding what requests are being made to the Hetzner Robot API.
+
+**Note:** Debug output may contain sensitive information. Be careful when sharing logs publicly.
+
 ## API Documentation
 
 Full Hetzner Robot API documentation: https://robot.hetzner.com/doc/webservice/en.html
