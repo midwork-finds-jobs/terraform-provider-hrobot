@@ -114,7 +114,7 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 							MarkdownDescription: "Source port or port range",
 							Optional:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Optional:            true,
 						},
@@ -158,7 +158,7 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 							MarkdownDescription: "Source port or port range",
 							Optional:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Optional:            true,
 						},

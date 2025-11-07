@@ -46,15 +46,15 @@ type FirewallResourceModel struct {
 
 // FirewallRuleModel describes a firewall rule.
 type FirewallRuleModel struct {
-	Name       types.String `tfsdk:"name"`
-	IPVersion  types.String `tfsdk:"ip_version"`
-	Action     types.String `tfsdk:"action"`
-	Protocol   types.String `tfsdk:"protocol"`
-	SourceIP   types.String `tfsdk:"source_ip"`
-	DestIP     types.String `tfsdk:"dest_ip"`
-	SourcePort types.String `tfsdk:"source_port"`
-	DestPort   types.String `tfsdk:"dest_port"`
-	TCPFlags   types.String `tfsdk:"tcp_flags"`
+	Name            types.String `tfsdk:"name"`
+	IPVersion       types.String `tfsdk:"ip_version"`
+	Action          types.String `tfsdk:"action"`
+	Protocol        types.String `tfsdk:"protocol"`
+	SourceIP        types.String `tfsdk:"source_ip"`
+	DestIP          types.String `tfsdk:"dest_ip"`
+	SourcePort      types.String `tfsdk:"source_port"`
+	DestinationPort types.String `tfsdk:"destination_port"`
+	TCPFlags        types.String `tfsdk:"tcp_flags"`
 }
 
 func (r *FirewallResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -126,7 +126,7 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Source port or port range",
 							Optional:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Optional:            true,
 						},
@@ -170,7 +170,7 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Source port or port range",
 							Optional:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Optional:            true,
 						},
@@ -458,7 +458,7 @@ func convertToHRobotRule(rule FirewallRuleModel) hrobot.FirewallRule {
 		SourceIP:   normalizeCIDR(rule.SourceIP.ValueString()),
 		DestIP:     normalizeCIDR(rule.DestIP.ValueString()),
 		SourcePort: rule.SourcePort.ValueString(),
-		DestPort:   rule.DestPort.ValueString(),
+		DestPort:   rule.DestinationPort.ValueString(),
 		TCPFlags:   rule.TCPFlags.ValueString(),
 	}
 }
@@ -493,15 +493,15 @@ func containsChar(s string, c rune) bool {
 // Helper function to convert hrobot rule to Terraform model rule.
 func convertFromHRobotRule(rule hrobot.FirewallRule) FirewallRuleModel {
 	return FirewallRuleModel{
-		Name:       stringOrNull(rule.Name),
-		IPVersion:  stringOrNull(string(rule.IPVersion)),
-		Action:     stringOrNull(string(rule.Action)),
-		Protocol:   stringOrNull(string(rule.Protocol)),
-		SourceIP:   stringOrNull(rule.SourceIP),
-		DestIP:     stringOrNull(rule.DestIP),
-		SourcePort: stringOrNull(rule.SourcePort),
-		DestPort:   stringOrNull(rule.DestPort),
-		TCPFlags:   stringOrNull(rule.TCPFlags),
+		Name:            stringOrNull(rule.Name),
+		IPVersion:       stringOrNull(string(rule.IPVersion)),
+		Action:          stringOrNull(string(rule.Action)),
+		Protocol:        stringOrNull(string(rule.Protocol)),
+		SourceIP:        stringOrNull(rule.SourceIP),
+		DestIP:          stringOrNull(rule.DestIP),
+		SourcePort:      stringOrNull(rule.SourcePort),
+		DestinationPort: stringOrNull(rule.DestPort),
+		TCPFlags:        stringOrNull(rule.TCPFlags),
 	}
 }
 

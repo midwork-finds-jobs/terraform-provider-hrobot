@@ -104,7 +104,7 @@ func (d *FirewallDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 							MarkdownDescription: "Source port or port range",
 							Computed:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Computed:            true,
 						},
@@ -148,7 +148,7 @@ func (d *FirewallDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 							MarkdownDescription: "Source port or port range",
 							Computed:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Computed:            true,
 						},

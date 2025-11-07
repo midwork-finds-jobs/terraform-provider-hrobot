@@ -100,7 +100,7 @@ func (d *FirewallTemplateDataSource) Schema(_ context.Context, _ datasource.Sche
 							MarkdownDescription: "Source port or port range",
 							Computed:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Computed:            true,
 						},
@@ -144,7 +144,7 @@ func (d *FirewallTemplateDataSource) Schema(_ context.Context, _ datasource.Sche
 							MarkdownDescription: "Source port or port range",
 							Computed:            true,
 						},
-						"dest_port": schema.StringAttribute{
+						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
 							Computed:            true,
 						},
