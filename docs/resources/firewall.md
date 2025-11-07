@@ -30,25 +30,29 @@ resource "hrobot_firewall" "example" {
 
   input_rules = [
     {
-      name       = "allow ssh"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "22"
+      name             = "allow ssh from office"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "22"
+      source_ips = [
+        "203.0.113.10",
+        "203.0.113.11"
+      ]
     },
     {
-      name       = "allow http"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "80"
+      name             = "allow http"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "80"
     },
     {
-      name       = "allow https"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "443"
+      name             = "allow https"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "443"
     },
   ]
 }
@@ -63,6 +67,7 @@ resource "hrobot_firewall" "example" {
 
 ### Optional
 
+- `filter_ipv6` (Boolean) enable ipv6 packet filtering. when enabled, the firewall will also filter ipv6 packets according to the configured rules. (default: true)
 - `input_rules` (Attributes List) Input firewall rules (see [below for nested schema](#nestedatt--input_rules))
 - `output_rules` (Attributes List) Output firewall rules (see [below for nested schema](#nestedatt--output_rules))
 - `template_id` (String) firewall template id to apply. when set, this will apply the template rules to the server. cannot be used together with input_rules/output_rules. the whitelist_hetzner_services setting comes from the template.
@@ -82,12 +87,12 @@ Required:
 
 Optional:
 
-- `dest_ip` (String) Destination IP address or CIDR
-- `dest_port` (String) Destination port or port range
+- `destination_ips` (List of String) List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
+- `destination_port` (String) Destination port or port range
 - `ip_version` (String) IP version: 'ipv4' or 'ipv6'
 - `name` (String) Rule name
 - `protocol` (String) Protocol: 'tcp', 'udp', 'icmp', 'esp', 'gre'
-- `source_ip` (String) Source IP address or CIDR
+- `source_ips` (List of String) List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
 - `source_port` (String) Source port or port range
 - `tcp_flags` (String) TCP flags
 
@@ -101,11 +106,11 @@ Required:
 
 Optional:
 
-- `dest_ip` (String) Destination IP address or CIDR
-- `dest_port` (String) Destination port or port range
+- `destination_ips` (List of String) List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
+- `destination_port` (String) Destination port or port range
 - `ip_version` (String) IP version: 'ipv4' or 'ipv6'
 - `name` (String) Rule name
 - `protocol` (String) Protocol: 'tcp', 'udp', 'icmp', 'esp', 'gre'
-- `source_ip` (String) Source IP address or CIDR
+- `source_ips` (List of String) List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
 - `source_port` (String) Source port or port range
 - `tcp_flags` (String) TCP flags

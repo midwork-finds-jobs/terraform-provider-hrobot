@@ -50,8 +50,8 @@ type FirewallRuleModel struct {
 	IPVersion       types.String `tfsdk:"ip_version"`
 	Action          types.String `tfsdk:"action"`
 	Protocol        types.String `tfsdk:"protocol"`
-	SourceIP        types.String `tfsdk:"source_ip"`
-	DestIP          types.String `tfsdk:"dest_ip"`
+	SourceIPs       types.List   `tfsdk:"source_ips"`
+	DestinationIPs  types.List   `tfsdk:"destination_ips"`
 	SourcePort      types.String `tfsdk:"source_port"`
 	DestinationPort types.String `tfsdk:"destination_port"`
 	TCPFlags        types.String `tfsdk:"tcp_flags"`
@@ -84,10 +84,10 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 				Default:             booldefault.StaticBool(true),
 			},
 			"filter_ipv6": schema.BoolAttribute{
-				MarkdownDescription: "enable ipv6 packet filtering. when enabled, the firewall will also filter ipv6 packets according to the configured rules.",
+				MarkdownDescription: "enable ipv6 packet filtering. when enabled, the firewall will also filter ipv6 packets according to the configured rules. (default: true)",
 				Optional:            true,
 				Computed:            true,
-				Default:             booldefault.StaticBool(false),
+				Default:             booldefault.StaticBool(true),
 			},
 			"template_id": schema.StringAttribute{
 				MarkdownDescription: "firewall template id to apply. when set, this will apply the template rules to the server. cannot be used together with input_rules/output_rules. the whitelist_hetzner_services setting comes from the template.",
@@ -114,12 +114,14 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Protocol: 'tcp', 'udp', 'icmp', 'esp', 'gre'",
 							Optional:            true,
 						},
-						"source_ip": schema.StringAttribute{
-							MarkdownDescription: "Source IP address or CIDR",
+						"source_ips": schema.ListAttribute{
+							MarkdownDescription: "List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
-						"dest_ip": schema.StringAttribute{
-							MarkdownDescription: "Destination IP address or CIDR",
+						"destination_ips": schema.ListAttribute{
+							MarkdownDescription: "List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
@@ -158,12 +160,14 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 							MarkdownDescription: "Protocol: 'tcp', 'udp', 'icmp', 'esp', 'gre'",
 							Optional:            true,
 						},
-						"source_ip": schema.StringAttribute{
-							MarkdownDescription: "Source IP address or CIDR",
+						"source_ips": schema.ListAttribute{
+							MarkdownDescription: "List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
-						"dest_ip": schema.StringAttribute{
-							MarkdownDescription: "Destination IP address or CIDR",
+						"destination_ips": schema.ListAttribute{
+							MarkdownDescription: "List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
@@ -250,19 +254,27 @@ func (r *FirewallResource) Create(ctx context.Context, req resource.CreateReques
 			FilterIPv6:   data.FilterIPv6.ValueBool(),
 		}
 
-		// Convert input rules
+		// Convert input rules (with array expansion)
 		if len(data.InputRules) > 0 {
-			updateConfig.Rules.Input = make([]hrobot.FirewallRule, len(data.InputRules))
-			for i, rule := range data.InputRules {
-				updateConfig.Rules.Input[i] = convertToHRobotRule(rule)
+			updateConfig.Rules.Input = convertToAPIRules(data.InputRules)
+			if len(updateConfig.Rules.Input) > 10 {
+				resp.Diagnostics.AddError(
+					"Too many input firewall rules after expansion",
+					fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d input rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(updateConfig.Rules.Input)),
+				)
+				return
 			}
 		}
 
-		// Convert output rules
+		// Convert output rules (with array expansion)
 		if len(data.OutputRules) > 0 {
-			updateConfig.Rules.Output = make([]hrobot.FirewallRule, len(data.OutputRules))
-			for i, rule := range data.OutputRules {
-				updateConfig.Rules.Output[i] = convertToHRobotRule(rule)
+			updateConfig.Rules.Output = convertToAPIRules(data.OutputRules)
+			if len(updateConfig.Rules.Output) > 10 {
+				resp.Diagnostics.AddError(
+					"Too many output firewall rules after expansion",
+					fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d output rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(updateConfig.Rules.Output)),
+				)
+				return
 			}
 		}
 
@@ -394,19 +406,27 @@ func (r *FirewallResource) Update(ctx context.Context, req resource.UpdateReques
 			FilterIPv6:   data.FilterIPv6.ValueBool(),
 		}
 
-		// Convert input rules
+		// Convert input rules (with array expansion)
 		if len(data.InputRules) > 0 {
-			updateConfig.Rules.Input = make([]hrobot.FirewallRule, len(data.InputRules))
-			for i, rule := range data.InputRules {
-				updateConfig.Rules.Input[i] = convertToHRobotRule(rule)
+			updateConfig.Rules.Input = convertToAPIRules(data.InputRules)
+			if len(updateConfig.Rules.Input) > 10 {
+				resp.Diagnostics.AddError(
+					"Too many input firewall rules after expansion",
+					fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d input rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(updateConfig.Rules.Input)),
+				)
+				return
 			}
 		}
 
-		// Convert output rules
+		// Convert output rules (with array expansion)
 		if len(data.OutputRules) > 0 {
-			updateConfig.Rules.Output = make([]hrobot.FirewallRule, len(data.OutputRules))
-			for i, rule := range data.OutputRules {
-				updateConfig.Rules.Output[i] = convertToHRobotRule(rule)
+			updateConfig.Rules.Output = convertToAPIRules(data.OutputRules)
+			if len(updateConfig.Rules.Output) > 10 {
+				resp.Diagnostics.AddError(
+					"Too many output firewall rules after expansion",
+					fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d output rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(updateConfig.Rules.Output)),
+				)
+				return
 			}
 		}
 
@@ -463,15 +483,15 @@ func (r *FirewallResource) ImportState(ctx context.Context, req resource.ImportS
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 }
 
-// Helper function to convert Terraform model rule to hrobot rule.
-func convertToHRobotRule(rule FirewallRuleModel) hrobot.FirewallRule {
+// Helper function to convert Terraform model rule to hrobot rule with a specific source/dest IP.
+func convertToHRobotRuleWithIPs(rule FirewallRuleModel, sourceIP, destIP string) hrobot.FirewallRule {
 	return hrobot.FirewallRule{
 		Name:       rule.Name.ValueString(),
 		IPVersion:  hrobot.IPVersion(rule.IPVersion.ValueString()),
 		Action:     hrobot.Action(rule.Action.ValueString()),
 		Protocol:   hrobot.Protocol(rule.Protocol.ValueString()),
-		SourceIP:   normalizeCIDR(rule.SourceIP.ValueString()),
-		DestIP:     normalizeCIDR(rule.DestIP.ValueString()),
+		SourceIP:   normalizeCIDR(sourceIP),
+		DestIP:     normalizeCIDR(destIP),
 		SourcePort: rule.SourcePort.ValueString(),
 		DestPort:   rule.DestinationPort.ValueString(),
 		TCPFlags:   rule.TCPFlags.ValueString(),
@@ -507,13 +527,28 @@ func containsChar(s string, c rune) bool {
 
 // Helper function to convert hrobot rule to Terraform model rule.
 func convertFromHRobotRule(rule hrobot.FirewallRule) FirewallRuleModel {
+	// Convert single IPs to lists for consistency
+	var sourceIPList types.List
+	if rule.SourceIP != "" {
+		sourceIPList, _ = types.ListValueFrom(context.Background(), types.StringType, []string{rule.SourceIP})
+	} else {
+		sourceIPList = types.ListNull(types.StringType)
+	}
+
+	var destinationIPList types.List
+	if rule.DestIP != "" {
+		destinationIPList, _ = types.ListValueFrom(context.Background(), types.StringType, []string{rule.DestIP})
+	} else {
+		destinationIPList = types.ListNull(types.StringType)
+	}
+
 	return FirewallRuleModel{
 		Name:            stringOrNull(rule.Name),
 		IPVersion:       stringOrNull(string(rule.IPVersion)),
 		Action:          stringOrNull(string(rule.Action)),
 		Protocol:        stringOrNull(string(rule.Protocol)),
-		SourceIP:        stringOrNull(rule.SourceIP),
-		DestIP:          stringOrNull(rule.DestIP),
+		SourceIPs:       sourceIPList,
+		DestinationIPs:  destinationIPList,
 		SourcePort:      stringOrNull(rule.SourcePort),
 		DestinationPort: stringOrNull(rule.DestPort),
 		TCPFlags:        stringOrNull(rule.TCPFlags),
@@ -529,11 +564,37 @@ func stringOrNull(s string) types.String {
 }
 
 // Helper function to convert slice of Terraform rules to API rules.
+// This function expands rules with multiple source_ips or destination_ips values into separate rules.
 func convertToAPIRules(rules []FirewallRuleModel) []hrobot.FirewallRule {
-	apiRules := make([]hrobot.FirewallRule, len(rules))
-	for i, rule := range rules {
-		apiRules[i] = convertToHRobotRule(rule)
+	var apiRules []hrobot.FirewallRule
+
+	for _, rule := range rules {
+		// Extract source IPs from the list
+		var sourceIPs []string
+		if !rule.SourceIPs.IsNull() && !rule.SourceIPs.IsUnknown() {
+			_ = rule.SourceIPs.ElementsAs(context.Background(), &sourceIPs, false)
+		}
+		if len(sourceIPs) == 0 {
+			sourceIPs = []string{""} // Empty string for no source IP
+		}
+
+		// Extract destination IPs from the list
+		var destinationIPs []string
+		if !rule.DestinationIPs.IsNull() && !rule.DestinationIPs.IsUnknown() {
+			_ = rule.DestinationIPs.ElementsAs(context.Background(), &destinationIPs, false)
+		}
+		if len(destinationIPs) == 0 {
+			destinationIPs = []string{""} // Empty string for no destination IP
+		}
+
+		// Create a rule for each combination of source and destination IPs
+		for _, sourceIP := range sourceIPs {
+			for _, destinationIP := range destinationIPs {
+				apiRules = append(apiRules, convertToHRobotRuleWithIPs(rule, sourceIP, destinationIP))
+			}
+		}
 	}
+
 	return apiRules
 }
 

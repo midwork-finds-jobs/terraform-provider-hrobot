@@ -38,6 +38,7 @@ data "hrobot_firewall" "example" {
 
 ### Read-Only
 
+- `filter_ipv6` (Boolean) Whether IPv6 packet filtering is enabled
 - `id` (String) Firewall identifier (server number as string)
 - `input_rules` (Attributes List) Input firewall rules (see [below for nested schema](#nestedatt--input_rules))
 - `output_rules` (Attributes List) Output firewall rules (see [below for nested schema](#nestedatt--output_rules))
@@ -52,12 +53,12 @@ data "hrobot_firewall" "example" {
 Read-Only:
 
 - `action` (String) Action: 'accept' or 'discard'
-- `dest_ip` (String) Destination IP address or CIDR
-- `dest_port` (String) Destination port or port range
+- `destination_ips` (List of String) List of destination IP addresses or CIDRs
+- `destination_port` (String) Destination port or port range
 - `ip_version` (String) IP version: 'ipv4' or 'ipv6'
 - `name` (String) Rule name
 - `protocol` (String) Protocol: 'tcp', 'udp', 'icmp', 'esp', 'gre'
-- `source_ip` (String) Source IP address or CIDR
+- `source_ips` (List of String) List of source IP addresses or CIDRs
 - `source_port` (String) Source port or port range
 - `tcp_flags` (String) TCP flags
 
@@ -68,11 +69,11 @@ Read-Only:
 Read-Only:
 
 - `action` (String) Action: 'accept' or 'discard'
-- `dest_ip` (String) Destination IP address or CIDR
-- `dest_port` (String) Destination port or port range
+- `destination_ips` (List of String) List of destination IP addresses or CIDRs
+- `destination_port` (String) Destination port or port range
 - `ip_version` (String) IP version: 'ipv4' or 'ipv6'
 - `name` (String) Rule name
 - `protocol` (String) Protocol: 'tcp', 'udp', 'icmp', 'esp', 'gre'
-- `source_ip` (String) Source IP address or CIDR
+- `source_ips` (List of String) List of source IP addresses or CIDRs
 - `source_port` (String) Source port or port range
 - `tcp_flags` (String) TCP flags

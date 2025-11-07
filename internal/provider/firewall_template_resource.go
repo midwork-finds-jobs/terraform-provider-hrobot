@@ -108,12 +108,14 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 							MarkdownDescription: "Protocol (tcp, udp, icmp, esp, gre)",
 							Optional:            true,
 						},
-						"source_ip": schema.StringAttribute{
-							MarkdownDescription: "Source IP address or CIDR",
+						"source_ips": schema.ListAttribute{
+							MarkdownDescription: "List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
-						"dest_ip": schema.StringAttribute{
-							MarkdownDescription: "Destination IP address or CIDR",
+						"destination_ips": schema.ListAttribute{
+							MarkdownDescription: "List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
@@ -156,12 +158,14 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 							MarkdownDescription: "Protocol (tcp, udp, icmp, esp, gre)",
 							Optional:            true,
 						},
-						"source_ip": schema.StringAttribute{
-							MarkdownDescription: "Source IP address or CIDR",
+						"source_ips": schema.ListAttribute{
+							MarkdownDescription: "List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
-						"dest_ip": schema.StringAttribute{
-							MarkdownDescription: "Destination IP address or CIDR",
+						"destination_ips": schema.ListAttribute{
+							MarkdownDescription: "List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
@@ -209,18 +213,20 @@ func (r *FirewallTemplateResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	// Validate rule count - Hetzner enforces a maximum of 10 firewall rules
-	if len(data.InputRules) > 10 {
+	// Validate rule count after expansion - Hetzner enforces a maximum of 10 firewall rules
+	expandedInputRules := convertToAPIRules(data.InputRules)
+	if len(expandedInputRules) > 10 {
 		resp.Diagnostics.AddError(
-			"Too many input firewall rules",
-			fmt.Sprintf("Hetzner enforces a maximum of 10 input firewall rules per server. You have configured %d rules. Please reduce the number of input_rules to 10 or fewer.", len(data.InputRules)),
+			"Too many input firewall rules after expansion",
+			fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d input rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(expandedInputRules)),
 		)
 		return
 	}
-	if len(data.OutputRules) > 10 {
+	expandedOutputRules := convertToAPIRules(data.OutputRules)
+	if len(expandedOutputRules) > 10 {
 		resp.Diagnostics.AddError(
-			"Too many output firewall rules",
-			fmt.Sprintf("Hetzner enforces a maximum of 10 output firewall rules per server. You have configured %d rules. Please reduce the number of output_rules to 10 or fewer.", len(data.OutputRules)),
+			"Too many output firewall rules after expansion",
+			fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d output rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(expandedOutputRules)),
 		)
 		return
 	}
@@ -249,15 +255,15 @@ func (r *FirewallTemplateResource) Create(ctx context.Context, req resource.Crea
 		}
 	}
 
-	// Convert Terraform model to API config
+	// Convert Terraform model to API config (using pre-validated expanded rules)
 	templateConfig := hrobot.TemplateConfig{
 		Name:         data.Name.ValueString(),
 		FilterIPv6:   data.FilterIPv6.ValueBool(),
 		WhitelistHOS: data.WhitelistHetznerServices.ValueBool(),
 		IsDefault:    data.IsDefault.ValueBool(),
 		Rules: hrobot.FirewallRules{
-			Input:  convertToAPIRules(data.InputRules),
-			Output: convertToAPIRules(data.OutputRules),
+			Input:  expandedInputRules,
+			Output: expandedOutputRules,
 		},
 	}
 
@@ -333,18 +339,20 @@ func (r *FirewallTemplateResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Validate rule count - Hetzner enforces a maximum of 10 firewall rules
-	if len(data.InputRules) > 10 {
+	// Validate rule count after expansion - Hetzner enforces a maximum of 10 firewall rules
+	expandedInputRules := convertToAPIRules(data.InputRules)
+	if len(expandedInputRules) > 10 {
 		resp.Diagnostics.AddError(
-			"Too many input firewall rules",
-			fmt.Sprintf("Hetzner enforces a maximum of 10 input firewall rules per server. You have configured %d rules. Please reduce the number of input_rules to 10 or fewer.", len(data.InputRules)),
+			"Too many input firewall rules after expansion",
+			fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d input rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(expandedInputRules)),
 		)
 		return
 	}
-	if len(data.OutputRules) > 10 {
+	expandedOutputRules := convertToAPIRules(data.OutputRules)
+	if len(expandedOutputRules) > 10 {
 		resp.Diagnostics.AddError(
-			"Too many output firewall rules",
-			fmt.Sprintf("Hetzner enforces a maximum of 10 output firewall rules per server. You have configured %d rules. Please reduce the number of output_rules to 10 or fewer.", len(data.OutputRules)),
+			"Too many output firewall rules after expansion",
+			fmt.Sprintf("After expanding source_ips and destination_ips arrays, you have %d output rules, but Hetzner enforces a maximum of 10 rules. Please reduce the number of IPs or rules.", len(expandedOutputRules)),
 		)
 		return
 	}
@@ -373,15 +381,15 @@ func (r *FirewallTemplateResource) Update(ctx context.Context, req resource.Upda
 		}
 	}
 
-	// Convert Terraform model to API config
+	// Convert Terraform model to API config (using pre-validated expanded rules)
 	templateConfig := hrobot.TemplateConfig{
 		Name:         data.Name.ValueString(),
 		FilterIPv6:   data.FilterIPv6.ValueBool(),
 		WhitelistHOS: data.WhitelistHetznerServices.ValueBool(),
 		IsDefault:    data.IsDefault.ValueBool(),
 		Rules: hrobot.FirewallRules{
-			Input:  convertToAPIRules(data.InputRules),
-			Output: convertToAPIRules(data.OutputRules),
+			Input:  expandedInputRules,
+			Output: expandedOutputRules,
 		},
 	}
 

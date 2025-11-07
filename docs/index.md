@@ -68,20 +68,20 @@ resource "hrobot_firewall_template" "ssh_access" {
 
   input_rules = [
     {
-      name       = "Allow SSH from my IP"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "22"
-      source_ip  = var.my_ip_address
+      name             = "Allow SSH from my IP"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "22"
+      source_ips       = [var.my_ip_address]
     },
     {
-      name       = "Allow establishing TCP"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocal   = "tcp"
-      dest_port  = "32768-65535"
-      tcp_flags  = "ack"
+      name             = "Allow establishing TCP"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "32768-65535"
+      tcp_flags        = "ack"
     },
     {
       name       = "Drop all other input"

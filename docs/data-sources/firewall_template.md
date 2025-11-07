@@ -51,12 +51,12 @@ data "hrobot_firewall_template" "example" {
 Read-Only:
 
 - `action` (String) Action (accept or discard)
-- `dest_ip` (String) Destination IP address or CIDR
-- `dest_port` (String) Destination port or port range
+- `destination_ips` (List of String) List of destination IP addresses or CIDRs
+- `destination_port` (String) Destination port or port range
 - `ip_version` (String) IP version (ipv4 or ipv6)
 - `name` (String) Rule name
 - `protocol` (String) Protocol (tcp, udp, icmp, esp, gre)
-- `source_ip` (String) Source IP address or CIDR
+- `source_ips` (List of String) List of source IP addresses or CIDRs
 - `source_port` (String) Source port or port range
 - `tcp_flags` (String) TCP flags
 
@@ -67,11 +67,11 @@ Read-Only:
 Read-Only:
 
 - `action` (String) Action (accept or discard)
-- `dest_ip` (String) Destination IP address or CIDR
-- `dest_port` (String) Destination port or port range
+- `destination_ips` (List of String) List of destination IP addresses or CIDRs
+- `destination_port` (String) Destination port or port range
 - `ip_version` (String) IP version (ipv4 or ipv6)
 - `name` (String) Rule name
 - `protocol` (String) Protocol (tcp, udp, icmp, esp, gre)
-- `source_ip` (String) Source IP address or CIDR
+- `source_ips` (List of String) List of source IP addresses or CIDRs
 - `source_port` (String) Source port or port range
 - `tcp_flags` (String) TCP flags

@@ -15,25 +15,30 @@ resource "hrobot_firewall_template" "example" {
 
   input_rules = [
     {
-      name       = "allow ssh"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "22"
+      name             = "allow ssh from specific IPs"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "22"
+      source_ips = [
+        "203.0.113.1",
+        "203.0.113.2",
+        "203.0.113.3"
+      ]
     },
     {
-      name       = "allow http"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "80"
+      name             = "allow http"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "80"
     },
     {
-      name       = "allow https"
-      ip_version = "ipv4"
-      action     = "accept"
-      protocol   = "tcp"
-      dest_port  = "443"
+      name             = "allow https"
+      ip_version       = "ipv4"
+      action           = "accept"
+      protocol         = "tcp"
+      destination_port = "443"
     },
   ]
 }

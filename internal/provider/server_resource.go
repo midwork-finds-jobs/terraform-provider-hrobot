@@ -625,8 +625,28 @@ func (r *ServerResource) ImportState(ctx context.Context, req resource.ImportSta
 			// Set default image to "Rescue system" as we don't know what was originally used
 			state.Image = types.StringValue("Rescue system")
 
-			// Note: We don't populate public_net during import.
-			// Users should add it to their config if they want to track IP addresses.
+			// Populate public_net with server IP information
+			state.PublicNet = &PublicNetModel{
+				IPv4Enabled: types.BoolValue(true),
+			}
+
+			// Set IPv4 if available
+			if server.ServerIP != nil {
+				state.PublicNet.IPv4 = types.StringValue(server.ServerIP.String())
+			} else {
+				state.PublicNet.IPv4 = types.StringNull()
+			}
+
+			// IPv6 - fetch from subnets
+			if len(server.Subnet) > 0 {
+				for _, subnet := range server.Subnet {
+					// Look for IPv6 subnet (IPv6 addresses don't have To4() representation)
+					if subnet.IP.To4() == nil {
+						state.PublicNet.IPv6 = types.StringValue(subnet.IP.String() + "/" + subnet.Mask)
+						break
+					}
+				}
+			}
 
 			// Save to state
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

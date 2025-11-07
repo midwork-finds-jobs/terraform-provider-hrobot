@@ -88,12 +88,14 @@ func (d *FirewallTemplateDataSource) Schema(_ context.Context, _ datasource.Sche
 							MarkdownDescription: "Protocol (tcp, udp, icmp, esp, gre)",
 							Computed:            true,
 						},
-						"source_ip": schema.StringAttribute{
-							MarkdownDescription: "Source IP address or CIDR",
+						"source_ips": schema.ListAttribute{
+							MarkdownDescription: "List of source IP addresses or CIDRs",
+							ElementType:         types.StringType,
 							Computed:            true,
 						},
-						"dest_ip": schema.StringAttribute{
-							MarkdownDescription: "Destination IP address or CIDR",
+						"destination_ips": schema.ListAttribute{
+							MarkdownDescription: "List of destination IP addresses or CIDRs",
+							ElementType:         types.StringType,
 							Computed:            true,
 						},
 						"source_port": schema.StringAttribute{
@@ -132,12 +134,14 @@ func (d *FirewallTemplateDataSource) Schema(_ context.Context, _ datasource.Sche
 							MarkdownDescription: "Protocol (tcp, udp, icmp, esp, gre)",
 							Computed:            true,
 						},
-						"source_ip": schema.StringAttribute{
-							MarkdownDescription: "Source IP address or CIDR",
+						"source_ips": schema.ListAttribute{
+							MarkdownDescription: "List of source IP addresses or CIDRs",
+							ElementType:         types.StringType,
 							Computed:            true,
 						},
-						"dest_ip": schema.StringAttribute{
-							MarkdownDescription: "Destination IP address or CIDR",
+						"destination_ips": schema.ListAttribute{
+							MarkdownDescription: "List of destination IP addresses or CIDRs",
+							ElementType:         types.StringType,
 							Computed:            true,
 						},
 						"source_port": schema.StringAttribute{
