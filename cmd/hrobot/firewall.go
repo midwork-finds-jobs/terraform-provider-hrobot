@@ -389,37 +389,6 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 	return nil
 }
 
-func blockMail(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
-	mailPorts := []string{"25", "587", "465", "143", "993", "995", "110"}
-
-	var rules []hrobot.FirewallRule
-	for _, port := range mailPorts {
-		// Block both IPv4 and IPv6
-		for _, ipVersion := range []hrobot.IPVersion{hrobot.IPv4, hrobot.IPv6} {
-			rule := hrobot.FirewallRule{
-				Name:      fmt.Sprintf("block mail port %s", port),
-				IPVersion: ipVersion,
-				Action:    hrobot.ActionDiscard,
-				Protocol:  hrobot.ProtocolTCP,
-				DestPort:  port,
-			}
-			rules = append(rules, rule)
-		}
-	}
-
-	info, err := addFirewallRules(ctx, client, serverID, rules)
-	if err != nil {
-		return err
-	}
-
-	if info.Added > 0 {
-		fmt.Printf("✓ successfully blocked mail ports: %s\n", strings.Join(mailPorts, ", "))
-		fmt.Println("note: firewall changes may take 30-40 seconds to apply")
-	}
-
-	return nil
-}
-
 func blockHTTP(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
 	var rules []hrobot.FirewallRule
 
@@ -448,21 +417,13 @@ func blockHTTP(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 	return nil
 }
 
-func hardenFirewall(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, blockMailFlag bool, blockHTTPFlag bool) error {
-	if !blockMailFlag && !blockHTTPFlag {
-		return fmt.Errorf("specify at least one hardening option: --block-mail or --block-http")
+func hardenFirewall(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, blockHTTPFlag bool) error {
+	if !blockHTTPFlag {
+		return fmt.Errorf("specify --block-http flag")
 	}
 
-	if blockMailFlag {
-		if err := blockMail(ctx, client, serverID); err != nil {
-			return err
-		}
-	}
-
-	if blockHTTPFlag {
-		if err := blockHTTP(ctx, client, serverID); err != nil {
-			return err
-		}
+	if err := blockHTTP(ctx, client, serverID); err != nil {
+		return err
 	}
 
 	fmt.Println("\n✓ firewall hardening completed")

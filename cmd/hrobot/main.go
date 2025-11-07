@@ -403,9 +403,6 @@ func handleFirewallCommand(ctx context.Context, client *hrobot.Client) error {
 	case "allow-mosh":
 		return handleAllowMOSH(ctx, client)
 
-	case "block-mail":
-		return handleBlockMail(ctx, client)
-
 	case "block-http":
 		return handleBlockHTTP(ctx, client)
 
@@ -456,11 +453,9 @@ func printFirewallHelp() {
 	fmt.Println("      allow SSH access from specific IPs")
 	fmt.Println("  allow-https <server-id> --source-ips <ips>")
 	fmt.Println("      allow HTTPS access from specific IPs (supports IPv6)")
-	fmt.Println("  block-mail <server-id>")
-	fmt.Println("      block common mail ports (25, 587, 465, 143, 993, 995, 110)")
 	fmt.Println("  block-http <server-id>")
 	fmt.Println("      block insecure HTTP (port 80)")
-	fmt.Println("  harden <server-id> [--block-mail] [--block-http]")
+	fmt.Println("  harden <server-id> --block-http")
 	fmt.Println("      apply common security hardening")
 	fmt.Println("\nRule Management:")
 	fmt.Println("  add-rule <server-id> --direction <in|out> --protocol <proto> [options]")
@@ -656,23 +651,6 @@ func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
 	return enhanceAuthError(allowMOSH(ctx, client, serverID, sourceIPs, myIP))
 }
 
-func handleBlockMail(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
-		fmt.Printf("Usage: %s firewall block-mail <server-id>\n\n", os.Args[0])
-		fmt.Println("block common mail ports (25, 587, 465, 143, 993, 995, 110)")
-		fmt.Println("\nArguments:")
-		fmt.Println("  <server-id>    The server number")
-		return nil
-	}
-
-	serverID, err := parseServerID(os.Args[3])
-	if err != nil {
-		return err
-	}
-
-	return enhanceAuthError(blockMail(ctx, client, serverID))
-}
-
 func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall block-http <server-id>\n\n", os.Args[0])
@@ -692,12 +670,11 @@ func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
 
 func handleHarden(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 4 {
-		fmt.Printf("Usage: %s firewall harden <server-id> [--block-mail] [--block-http]\n\n", os.Args[0])
+		fmt.Printf("Usage: %s firewall harden <server-id> --block-http\n\n", os.Args[0])
 		fmt.Println("apply common security hardening")
 		fmt.Println("\nArguments:")
 		fmt.Println("  <server-id>    The server number")
 		fmt.Println("\nFlags:")
-		fmt.Println("  --block-mail   Block mail ports")
 		fmt.Println("  --block-http   Block insecure HTTP")
 		return nil
 	}
@@ -707,10 +684,9 @@ func handleHarden(ctx context.Context, client *hrobot.Client) error {
 		return err
 	}
 
-	blockMailFlag := parseFlagBool(os.Args, "--block-mail")
 	blockHTTPFlag := parseFlagBool(os.Args, "--block-http")
 
-	return enhanceAuthError(hardenFirewall(ctx, client, serverID, blockMailFlag, blockHTTPFlag))
+	return enhanceAuthError(hardenFirewall(ctx, client, serverID, blockHTTPFlag))
 }
 
 // Phase 2 command handlers.

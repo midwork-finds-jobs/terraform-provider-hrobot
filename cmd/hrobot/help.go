@@ -121,7 +121,6 @@ Available Commands:
     firewall allow-ssh <server-id>           Allow SSH access (see firewall --help)
     firewall allow-https <server-id>         Allow HTTPS access (see firewall --help)
     firewall allow-mosh <server-id>          Allow MOSH access (SSH + UDP 60000-61000)
-    firewall block-mail <server-id>          Block mail ports
     firewall block-http <server-id>          Block insecure HTTP
     firewall harden <server-id>              Apply security hardening
     firewall add-rule <server-id>            Add firewall rule
