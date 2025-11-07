@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0 (2024-11-07)
+
+BREAKING CHANGES:
+
+- **firewall**: Renamed `source_ip` to `source_ips` (now requires list syntax)
+- **firewall**: Renamed `destination_ip` to `destination_ips` (now requires list syntax)
+- **firewall**: Changed `filter_ipv6` default from `false` to `true` for better security
+
+FEATURES:
+
+- **firewall**: Add automatic IP array expansion - rules with multiple source/destination IPs are now automatically
+  expanded into individual firewall rules
+- **firewall**: Add validation to ensure expanded rules don't exceed Hetzner's 10-rule limit per direction
+- **firewall**: Automatically append `/32` CIDR notation to IPv4 addresses without it
+- **server**: Fix import to properly populate `public_net` block, resolving output evaluation errors
+
+IMPROVEMENTS:
+
+- **docs**: Update all examples to demonstrate array syntax for firewall IPs
+- **docs**: Clarify that IP attributes are lists, not single values
+
 ## 0.1.2
 
 Rename `hrobot_failover` to `hrobot_failover_ip`.
