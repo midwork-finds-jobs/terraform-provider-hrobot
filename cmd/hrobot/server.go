@@ -187,6 +187,25 @@ func powerOffServer(ctx context.Context, client *hrobot.Client, serverID hrobot.
 	return nil
 }
 
+func wakeServer(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
+	fmt.Printf("Sending Wake-on-LAN packet to server #%d...\n", serverID)
+
+	wol, err := client.WOL.Send(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to send Wake-on-LAN packet: %w", err)
+	}
+
+	fmt.Printf("✓ Wake-on-LAN packet sent successfully!\n")
+	fmt.Printf("  Server IP:      %s\n", wol.ServerIP)
+	if wol.ServerIPv6Net != "" {
+		fmt.Printf("  Server IPv6:    %s\n", wol.ServerIPv6Net)
+	}
+	fmt.Printf("  Server Number:  %d\n", wol.ServerNumber)
+	fmt.Println("\nNote: The server should start booting if it supports Wake-on-LAN.")
+
+	return nil
+}
+
 func showTraffic(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, args []string) error {
 	// Parse flags
 	days := 14

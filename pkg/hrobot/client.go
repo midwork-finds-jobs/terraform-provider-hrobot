@@ -43,6 +43,7 @@ type Client struct {
 	RDNS     *RDNSService
 	Failover *FailoverService
 	Traffic  *TrafficService
+	WOL      *WOLService
 }
 
 // ClientOption configures the Client.
@@ -105,6 +106,7 @@ func NewClient(username, password string, opts ...ClientOption) *Client {
 	c.RDNS = NewRDNSService(c)
 	c.Failover = NewFailoverService(c)
 	c.Traffic = NewTrafficService(c)
+	c.WOL = NewWOLService(c)
 
 	return c
 }

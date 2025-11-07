@@ -111,6 +111,7 @@ Available Commands:
     server shutdown <id>                     Shutdown server
     server poweron <id>                      Power on server
     server poweroff <id>                     Power off server
+    server wake <id>                         Wake server using Wake-on-LAN
     server enable-rescue <id>                Enable rescue system
     server disable-rescue <id>               Disable rescue system
     server traffic <id>                      Show traffic statistics

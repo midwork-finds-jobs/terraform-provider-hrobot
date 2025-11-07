@@ -230,6 +230,22 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 		}
 		return enhanceAuthError(powerOffServer(ctx, client, hrobot.ServerID(serverID)))
 
+	case "wake":
+		if isHelpRequested() || len(os.Args) < 4 {
+			fmt.Printf("Usage: %s server wake <server-id>\n\n", os.Args[0])
+			fmt.Println("Send a Wake-on-LAN packet to wake the server.")
+			fmt.Println("\nArguments:")
+			fmt.Println("  <server-id>    The server number to wake")
+			printGlobalFlags()
+			return nil
+		}
+		serverIDStr := os.Args[3]
+		serverID, err := strconv.Atoi(serverIDStr)
+		if err != nil {
+			return fmt.Errorf("invalid server ID: %s", serverIDStr)
+		}
+		return enhanceAuthError(wakeServer(ctx, client, hrobot.ServerID(serverID)))
+
 	case "enable-rescue":
 		if isHelpRequested() || len(os.Args) < 4 {
 			fmt.Printf("Usage: %s server enable-rescue <server-id> [--linux|--vkvm] [--password]\n\n", os.Args[0])
