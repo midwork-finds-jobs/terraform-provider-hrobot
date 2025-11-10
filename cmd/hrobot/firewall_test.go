@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
@@ -290,5 +291,76 @@ func TestAddFirewallRules_WaitsForPendingChanges(t *testing.T) {
 	// Plus 1 POST to update
 	if callCount != 3 {
 		t.Errorf("expected 3 GET calls (initial + wait + re-fetch), got %d", callCount)
+	}
+}
+
+func TestAddFirewallRules_InvalidInputError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			// Return firewall with no rules
+			response := map[string]interface{}{
+				"firewall": map[string]interface{}{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "active",
+					"whitelist_hos": true,
+					"filter_ipv6":   false,
+					"port":          "main",
+					"rules": map[string]interface{}{
+						"input":  []map[string]interface{}{},
+						"output": []map[string]interface{}{},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		case "POST":
+			// Return INVALID_INPUT error
+			w.WriteHeader(http.StatusBadRequest)
+			response := map[string]interface{}{
+				"error": map[string]interface{}{
+					"status":  400,
+					"code":    "INVALID_INPUT",
+					"message": "invalid input",
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		}
+	}))
+	defer server.Close()
+
+	client := hrobot.NewClient("test-user", "test-pass", hrobot.WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	newRules := []hrobot.FirewallRule{
+		{
+			Name:      "Test Rule",
+			IPVersion: hrobot.IPv4,
+			Action:    hrobot.ActionAccept,
+			Protocol:  hrobot.ProtocolTCP,
+			SourceIP:  "1.2.3.4/32",
+			DestPort:  "22",
+		},
+	}
+
+	_, err := addFirewallRules(ctx, client, hrobot.ServerID(321), newRules)
+	if err == nil {
+		t.Fatal("expected error for INVALID_INPUT, got nil")
+	}
+
+	// Check that error message contains helpful information
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "invalid input") {
+		t.Errorf("error message should mention 'invalid input', got: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "Test Rule") {
+		t.Errorf("error message should list the rule name, got: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "list-rules") {
+		t.Errorf("error message should suggest listing rules, got: %s", errMsg)
 	}
 }

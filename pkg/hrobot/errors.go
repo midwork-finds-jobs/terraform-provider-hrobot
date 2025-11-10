@@ -190,3 +190,8 @@ func IsUnauthorizedError(err error) bool {
 func IsFirewallRuleLimitExceededError(err error) bool {
 	return IsAPIError(err, ErrFirewallRuleLimitExceeded)
 }
+
+// IsInvalidInputError checks if the error is an invalid input error.
+func IsInvalidInputError(err error) bool {
+	return IsAPIError(err, ErrInvalidInput)
+}

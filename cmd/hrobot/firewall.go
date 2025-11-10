@@ -202,6 +202,38 @@ To resolve this:
 Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
 				currentCount, len(rulesToAdd), serverID, serverID)
 		}
+
+		// Check if this is an invalid input error (likely duplicate rules)
+		if errors.As(err, &hrobotErr) && hrobot.IsInvalidInputError(hrobotErr) {
+			// Build list of rules we tried to add
+			var ruleNames []string
+			for _, rule := range rulesToAdd {
+				ruleNames = append(ruleNames, fmt.Sprintf("  - %s", rule.Name))
+			}
+
+			return nil, fmt.Errorf(`invalid input: the firewall rejected one or more rules
+
+This usually means:
+  • Similar rules already exist on the server (but weren't detected as duplicates)
+  • Rules conflict with existing firewall configuration
+
+Tried to add %d rule(s):
+%s
+
+To resolve this:
+  1. Check existing rules: hrobot firewall list-rules %d
+  2. Look for rules that might conflict with the ones above
+  3. Delete conflicting rules if needed: hrobot firewall delete-rule %d --name "<rule-name>"
+  4. Try adding your rules again
+
+Original error: %v`,
+				len(rulesToAdd),
+				strings.Join(ruleNames, "\n"),
+				serverID,
+				serverID,
+				err)
+		}
+
 		return nil, fmt.Errorf("failed to update firewall: %w", err)
 	}
 
