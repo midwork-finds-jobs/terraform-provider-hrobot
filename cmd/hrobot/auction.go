@@ -232,7 +232,7 @@ func listAuctionServers(ctx context.Context, client *hrobot.Client, location str
 	if location != "" || memoryMin > 0 || cpu != "" || cpuBenchmarkMin > 0 || diskSpaceMin > 0 || priceMax > 0 || gpuOnly {
 		fmt.Printf(" (filtered from %d total)", len(servers))
 	}
-	fmt.Println(":\n")
+	fmt.Println(":")
 
 	// Create table
 	t := table.New(os.Stdout)

@@ -92,6 +92,25 @@ type RulesAddedInfo struct {
 	Skipped int
 }
 
+// ensureFirewallReady checks if firewall is in "in process" state and waits for it to be ready.
+// It returns the updated firewall config after waiting (if necessary).
+func ensureFirewallReady(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, currentFw *hrobot.FirewallConfig) (*hrobot.FirewallConfig, error) {
+	if currentFw.Status == "in process" {
+		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
+		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
+			return nil, fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
+		}
+		// Re-fetch firewall config after waiting
+		updatedFw, err := client.Firewall.Get(ctx, serverID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get firewall after waiting: %w", err)
+		}
+		fmt.Println("✓ firewall is ready, applying changes...")
+		return updatedFw, nil
+	}
+	return currentFw, nil
+}
+
 // addFirewallRules is a helper that adds new input rules to the firewall.
 // Returns information about how many rules were added/skipped.
 func addFirewallRules(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, newRules []hrobot.FirewallRule) (*RulesAddedInfo, error) {
@@ -100,18 +119,10 @@ func addFirewallRules(ctx context.Context, client *hrobot.Client, serverID hrobo
 		return nil, fmt.Errorf("failed to get firewall: %w", err)
 	}
 
-	// Check if firewall is in "in process" state and wait for it to be ready
-	if fw.Status == "in process" {
-		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
-		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
-			return nil, fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
-		}
-		// Re-fetch firewall config after waiting
-		fw, err = client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get firewall after waiting: %w", err)
-		}
-		fmt.Println("✓ firewall is ready, applying changes...")
+	// Ensure firewall is ready before making changes
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
+	if err != nil {
+		return nil, err
 	}
 
 	// Filter out duplicate rules
@@ -475,18 +486,10 @@ func addRule(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerI
 		return fmt.Errorf("failed to get firewall: %w", err)
 	}
 
-	// Check if firewall is in "in process" state and wait for it to be ready
-	if fw.Status == "in process" {
-		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
-		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
-			return fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
-		}
-		// Re-fetch firewall config after waiting
-		fw, err = client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall after waiting: %w", err)
-		}
-		fmt.Println("✓ firewall is ready, applying changes...")
+	// Ensure firewall is ready before making changes
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
+	if err != nil {
+		return err
 	}
 
 	// Convert action string to typed constant
@@ -625,18 +628,10 @@ func deleteRule(ctx context.Context, client *hrobot.Client, serverID hrobot.Serv
 		return fmt.Errorf("failed to get firewall: %w", err)
 	}
 
-	// Check if firewall is in "in process" state and wait for it to be ready
-	if fw.Status == "in process" {
-		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
-		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
-			return fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
-		}
-		// Re-fetch firewall config after waiting
-		fw, err = client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall after waiting: %w", err)
-		}
-		fmt.Println("✓ firewall is ready, applying changes...")
+	// Ensure firewall is ready before making changes
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
+	if err != nil {
+		return err
 	}
 
 	if direction == "" {
@@ -803,18 +798,10 @@ func allowIP(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerI
 		return fmt.Errorf("failed to get firewall: %w", err)
 	}
 
-	// Check if firewall is in "in process" state and wait for it to be ready
-	if fw.Status == "in process" {
-		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
-		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
-			return fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
-		}
-		// Re-fetch firewall config after waiting
-		fw, err = client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall after waiting: %w", err)
-		}
-		fmt.Println("✓ firewall is ready, applying changes...")
+	// Ensure firewall is ready before making changes
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
+	if err != nil {
+		return err
 	}
 
 	fmt.Printf("current firewall status: %s\n", fw.Status)
@@ -1072,18 +1059,10 @@ func enableFirewall(ctx context.Context, client *hrobot.Client, serverID hrobot.
 		return fmt.Errorf("failed to get firewall: %w", err)
 	}
 
-	// Check if firewall is in "in process" state and wait for it to be ready
-	if fw.Status == "in process" {
-		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
-		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
-			return fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
-		}
-		// Re-fetch firewall config after waiting
-		fw, err = client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall after waiting: %w", err)
-		}
-		fmt.Println("✓ firewall is ready, applying changes...")
+	// Ensure firewall is ready before making changes
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
+	if err != nil {
+		return err
 	}
 
 	// Determine filter_ipv6 value
@@ -1130,18 +1109,10 @@ func disableFirewall(ctx context.Context, client *hrobot.Client, serverID hrobot
 		return fmt.Errorf("failed to get firewall: %w", err)
 	}
 
-	// Check if firewall is in "in process" state and wait for it to be ready
-	if fw.Status == "in process" {
-		fmt.Println("⏳ firewall is processing previous changes, waiting for it to be ready...")
-		if err := client.Firewall.WaitForFirewallReady(ctx, serverID); err != nil {
-			return fmt.Errorf("failed while waiting for firewall to be ready: %w", err)
-		}
-		// Re-fetch firewall config after waiting
-		fw, err = client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall after waiting: %w", err)
-		}
-		fmt.Println("✓ firewall is ready, applying changes...")
+	// Ensure firewall is ready before making changes
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
+	if err != nil {
+		return err
 	}
 
 	// Update firewall with disabled status while preserving other settings

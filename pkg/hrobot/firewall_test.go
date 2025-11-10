@@ -270,6 +270,123 @@ func TestFirewallService_Update(t *testing.T) {
 	}
 }
 
+func TestFirewallService_WaitForFirewallReady(t *testing.T) {
+	tests := []struct {
+		name       string
+		responses  []FirewallStatus // Sequence of statuses to return
+		wantError  bool
+		numRetries int // Expected number of retries
+	}{
+		{
+			name:       "already ready",
+			responses:  []FirewallStatus{FirewallStatusActive},
+			wantError:  false,
+			numRetries: 1,
+		},
+		{
+			name:       "becomes ready after one retry",
+			responses:  []FirewallStatus{"in process", FirewallStatusActive},
+			wantError:  false,
+			numRetries: 2,
+		},
+		{
+			name:       "becomes ready after multiple retries",
+			responses:  []FirewallStatus{"in process", "in process", "in process", FirewallStatusActive},
+			wantError:  false,
+			numRetries: 4,
+		},
+		{
+			name:       "disabled is also ready",
+			responses:  []FirewallStatus{"in process", FirewallStatusDisabled},
+			wantError:  false,
+			numRetries: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/firewall/321" {
+					t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
+				}
+				if r.Method != "GET" {
+					t.Errorf("expected GET request, got '%s'", r.Method)
+				}
+
+				// Return different status based on call count
+				status := FirewallStatusActive
+				if callCount < len(tt.responses) {
+					status = tt.responses[callCount]
+				}
+				callCount++
+
+				response := map[string]interface{}{
+					"firewall": map[string]interface{}{
+						"server_ip":     "123.123.123.123",
+						"server_number": 321,
+						"status":        status,
+						"whitelist_hos": true,
+						"port":          "main",
+						"rules": map[string]interface{}{
+							"input":  []map[string]interface{}{},
+							"output": []map[string]interface{}{},
+						},
+					},
+				}
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Fatalf("failed to encode response: %v", err)
+				}
+			}))
+			defer server.Close()
+
+			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+			ctx := context.Background()
+
+			err := client.Firewall.WaitForFirewallReady(ctx, ServerID(321))
+			if (err != nil) != tt.wantError {
+				t.Errorf("WaitForFirewallReady() error = %v, wantError %v", err, tt.wantError)
+			}
+
+			if callCount != tt.numRetries {
+				t.Errorf("expected %d retries, got %d", tt.numRetries, callCount)
+			}
+		})
+	}
+}
+
+func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Always return "in process" status
+		response := map[string]interface{}{
+			"firewall": map[string]interface{}{
+				"server_ip":     "123.123.123.123",
+				"server_number": 321,
+				"status":        "in process",
+				"whitelist_hos": true,
+				"port":          "main",
+				"rules": map[string]interface{}{
+					"input":  []map[string]interface{}{},
+					"output": []map[string]interface{}{},
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx, cancel := context.WithTimeout(context.Background(), 1) // Very short timeout
+	defer cancel()
+
+	err := client.Firewall.WaitForFirewallReady(ctx, ServerID(321))
+	if err == nil {
+		t.Error("expected timeout error, got nil")
+	}
+}
+
 func TestFirewallService_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name       string
