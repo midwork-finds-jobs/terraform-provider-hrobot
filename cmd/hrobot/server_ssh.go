@@ -17,7 +17,7 @@ import (
 )
 
 // sshToServer intelligently connects to a server via SSH, handling firewall configuration if needed.
-func sshToServer(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
+func sshToServer(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, user string) error {
 	// Step 1: Get server details to obtain IP address
 	fmt.Printf("fetching server details for #%d...\n", serverID)
 	server, err := client.Server.Get(ctx, serverID)
@@ -87,8 +87,8 @@ func sshToServer(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 	}
 
 	// Step 7: Execute SSH
-	fmt.Printf("\nconnecting to %s via SSH...\n", serverIP)
-	return execSSH(serverIP)
+	fmt.Printf("\nconnecting to %s@%s via SSH...\n", user, serverIP)
+	return execSSH(serverIP, user)
 }
 
 // isSSHPortOpen checks if the SSH port (22) is accessible on the given host.
@@ -144,7 +144,7 @@ func ipInCIDR(ip, cidr string) bool {
 }
 
 // execSSH executes the ssh command to connect to the server.
-func execSSH(host string) error {
+func execSSH(host, user string) error {
 	// Find SSH binary
 	sshPath, err := exec.LookPath("ssh")
 	if err != nil {
@@ -152,7 +152,7 @@ func execSSH(host string) error {
 	}
 
 	// Prepare SSH command arguments
-	args := []string{"ssh", fmt.Sprintf("root@%s", host)}
+	args := []string{"ssh", fmt.Sprintf("%s@%s", user, host)}
 
 	// Execute SSH, replacing current process
 	err = syscall.Exec(sshPath, args, os.Environ())
