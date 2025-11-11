@@ -446,6 +446,70 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 	return nil
 }
 
+func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool) error {
+	// Determine IPs
+	ips := sourceIPs
+	if myIP {
+		ip, err := getMyIP()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("detected your public IP: %s\n", ip)
+		ips = []string{ip + "/32"}
+	}
+
+	if len(ips) == 0 {
+		return fmt.Errorf("no source IPs specified")
+	}
+
+	// Build rules that allow ALL traffic
+	var rules []hrobot.FirewallRule
+
+	for _, ip := range ips {
+		ipVersion := detectIPVersion(ip)
+		nameIP := ip
+		if strings.Contains(ip, "/") {
+			nameIP = strings.Split(ip, "/")[0]
+		}
+
+		// Create rule allowing all traffic from the IP (no protocol/port restrictions)
+		rule := hrobot.FirewallRule{
+			Name:      fmt.Sprintf("Allow all %s", nameIP),
+			IPVersion: ipVersion,
+			Action:    hrobot.ActionAccept,
+			SourceIP:  ip,
+			// No Protocol, DestPort, or other restrictions = allow all
+		}
+		rules = append(rules, rule)
+	}
+
+	// Add all rules at once
+	info, err := addFirewallRules(ctx, client, serverID, rules)
+	if err != nil {
+		return err
+	}
+
+	// Show summary of what was added
+	if info.Added > 0 {
+		fmt.Printf("\n✓ successfully configured allow-all access (%d rule(s) added)\n", info.Added)
+		for _, ip := range ips {
+			fmt.Printf("  - Allow ALL traffic from %s\n", ip)
+		}
+		fmt.Println("\nwarning: these rules allow unrestricted access from the specified IPs")
+		fmt.Println("note: firewall changes may take 30-40 seconds to apply")
+	}
+
+	if info.Skipped > 0 {
+		fmt.Printf("\nℹ %d rule(s) already existed\n", info.Skipped)
+	}
+
+	if info.Added == 0 && info.Skipped > 0 {
+		fmt.Println("\n✓ allow-all already configured for this IP")
+	}
+
+	return nil
+}
+
 func blockHTTP(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID) error {
 	var rules []hrobot.FirewallRule
 

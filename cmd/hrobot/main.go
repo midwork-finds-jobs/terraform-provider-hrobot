@@ -379,6 +379,9 @@ func handleFirewallCommand(ctx context.Context, client *hrobot.Client) error {
 	case "allow-mosh":
 		return handleAllowMOSH(ctx, client)
 
+	case "allow-all":
+		return handleAllowAll(ctx, client)
+
 	case "block-http":
 		return handleBlockHTTP(ctx, client)
 
@@ -429,6 +432,10 @@ func printFirewallHelp() {
 	fmt.Println("      allow SSH access from specific IPs")
 	fmt.Println("  allow-https <server-id> --source-ips <ips>")
 	fmt.Println("      allow HTTPS access from specific IPs (supports IPv6)")
+	fmt.Println("  allow-mosh <server-id> --source-ips <ips> | --my-ip")
+	fmt.Println("      allow MOSH access (SSH + UDP 60000-61000)")
+	fmt.Println("  allow-all <server-id> --source-ips <ips> | --my-ip")
+	fmt.Println("      allow ALL traffic from specific IPs (use with caution)")
 	fmt.Println("  block-http <server-id>")
 	fmt.Println("      block insecure HTTP (port 80)")
 	fmt.Println("  harden <server-id> --block-http")
@@ -620,6 +627,31 @@ func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
 	myIP := parseFlagBool(os.Args, "--my-ip")
 
 	return enhanceAuthError(allowMOSH(ctx, client, serverID, sourceIPs, myIP))
+}
+
+func handleAllowAll(ctx context.Context, client *hrobot.Client) error {
+	if len(os.Args) < 4 {
+		fmt.Printf("Usage: %s firewall allow-all <server-id> --source-ips <ips> | --my-ip\n\n", os.Args[0])
+		fmt.Println("allow access to all ports from specific IPs")
+		fmt.Println("\nArguments:")
+		fmt.Println("  <server-id>    The server number")
+		fmt.Println("\nFlags:")
+		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs")
+		fmt.Println("  --my-ip        Use your current public IP")
+		fmt.Println("\nWarning: This creates a rule allowing ALL traffic from the specified IP(s).")
+		fmt.Println("         Use only for fully trusted sources.")
+		return nil
+	}
+
+	serverID, err := parseServerID(os.Args[3])
+	if err != nil {
+		return err
+	}
+
+	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
+	myIP := parseFlagBool(os.Args, "--my-ip")
+
+	return enhanceAuthError(allowAll(ctx, client, serverID, sourceIPs, myIP))
 }
 
 func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
