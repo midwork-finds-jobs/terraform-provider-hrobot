@@ -129,7 +129,7 @@ Or use context management:
 // handleServerCommand handles all server-related subcommands.
 func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 3 {
-		return fmt.Errorf("usage: %s server <subcommand>\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server", os.Args[0])
+		return fmt.Errorf("usage: %s server <subcommand>\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  wake <id>         - Wake server via WoL\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server\n  ssh <id>          - SSH into server with auto firewall config", os.Args[0])
 	}
 
 	subcommand := os.Args[2]
@@ -355,8 +355,30 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 		}
 		return enhanceAuthError(installOS(ctx, client, hrobot.ServerID(serverID), os.Args[4:]))
 
+	case "ssh":
+		if isHelpRequested() || len(os.Args) < 4 {
+			fmt.Printf("Usage: %s server ssh <server-id>\n\n", os.Args[0])
+			fmt.Println("SSH into a server with automatic firewall configuration.")
+			fmt.Println("\nArguments:")
+			fmt.Println("  <server-id>    The server number to SSH into")
+			fmt.Println("\nBehavior:")
+			fmt.Println("  1. Checks if SSH port (22) is accessible")
+			fmt.Println("  2. If not accessible, checks firewall configuration")
+			fmt.Println("  3. Adds your current IP to SSH allow rules if needed")
+			fmt.Println("  4. Waits for firewall to be ready")
+			fmt.Println("  5. Opens SSH connection to the server")
+			printGlobalFlags()
+			return nil
+		}
+		serverIDStr := os.Args[3]
+		serverID, err := strconv.Atoi(serverIDStr)
+		if err != nil {
+			return fmt.Errorf("invalid server ID: %s", serverIDStr)
+		}
+		return enhanceAuthError(sshToServer(ctx, client, hrobot.ServerID(serverID)))
+
 	default:
-		return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server", subcommand)
+		return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  wake <id>         - Wake server via WoL\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server\n  ssh <id>          - SSH into server with auto firewall config", subcommand)
 	}
 }
 
