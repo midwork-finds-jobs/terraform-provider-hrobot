@@ -369,46 +369,6 @@ func handleFirewallCommand(ctx context.Context, client *hrobot.Client) error {
 
 	subcommand := os.Args[2]
 	switch subcommand {
-	// Legacy commands (backward compatibility)
-	case "describe":
-		if len(os.Args) < 4 {
-			fmt.Printf("Usage: %s firewall describe <server-id>\n\n", os.Args[0])
-			fmt.Println("describe firewall configuration for a server (alias for list-rules)")
-			fmt.Println("\nArguments:")
-			fmt.Println("  <server-id>    The server number")
-			printGlobalFlags()
-			return nil
-		}
-		serverID, err := parseServerID(os.Args[3])
-		if err != nil {
-			return err
-		}
-		return enhanceAuthError(getFirewall(ctx, client, serverID))
-
-	case "allow":
-		if len(os.Args) < 5 {
-			fmt.Printf("Usage: %s firewall allow <server-id> <ip|--my-ip>\n\n", os.Args[0])
-			fmt.Println("add an IP address to the firewall allow list")
-			fmt.Println("\nArguments:")
-			fmt.Println("  <server-id>    The server number")
-			fmt.Println("  <ip>           The IP address to allow (or --my-ip to auto-detect)")
-			printGlobalFlags()
-			return nil
-		}
-		serverID, err := parseServerID(os.Args[3])
-		if err != nil {
-			return err
-		}
-		ipAddr := os.Args[4]
-		if ipAddr == "--my-ip" {
-			ip, err := getMyIP()
-			if err != nil {
-				return fmt.Errorf("failed to detect your IP: %w", err)
-			}
-			ipAddr = ip
-		}
-		return enhanceAuthError(allowIP(ctx, client, serverID, ipAddr))
-
 	// Phase 1: Convenience commands
 	case "allow-ssh":
 		return handleAllowSSH(ctx, client)
@@ -502,11 +462,6 @@ func printFirewallHelp() {
 	fmt.Println("      wait for firewall to be ready")
 	fmt.Println("  reset <server-id> --confirm")
 	fmt.Println("      reset firewall (delete all rules)")
-	fmt.Println("\nLegacy:")
-	fmt.Println("  describe <server-id>")
-	fmt.Println("      describe firewall (alias for list-rules)")
-	fmt.Println("  allow <server-id> <ip>")
-	fmt.Println("      add IP to allow list")
 }
 
 func parseServerID(s string) (hrobot.ServerID, error) {
