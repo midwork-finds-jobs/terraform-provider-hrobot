@@ -50,24 +50,70 @@ go install ./cmd/hrobot
 
 ```bash
 # Set credentials
-export HETZNER_ROBOT_USER="your-username"
-export HETZNER_ROBOT_PASSWORD="your-password"
+export HROBOT_USERNAME='#ws+XXXXXXX'
+export HROBOT_PASSWORD='YYYYYY'
 
-# List all servers:
-hrobot servers
+# Server Management
+hrobot server list                           # List all servers
+hrobot server describe 1234567               # Get server details
+hrobot server reboot 1234567                 # Reboot server
+hrobot server ssh 1234567                    # SSH with auto-firewall config
+hrobot server ssh 1234567 --user admin       # SSH as specific user
 
-# Get details for a specific server: 
-hrobot server 1234567
+# Firewall Management
+hrobot firewall list-rules 1234567           # Show firewall rules
+hrobot firewall allow-ssh 1234567 --my-ip    # Allow SSH from your IP
+hrobot firewall allow-https 1234567 --source-ips 1.2.3.4
+hrobot firewall allow-mosh 1234567 --my-ip   # Allow MOSH access
+hrobot firewall allow-all 1234567 --my-ip    # Allow all traffic (use with caution)
+hrobot firewall enable 1234567               # Enable firewall
+hrobot firewall disable 1234567              # Disable firewall
+hrobot firewall status 1234567               # Show firewall status
 
-# See firewall rules
-hrobot firewall get 1234567
+# Advanced Firewall Rules
+hrobot firewall add-rule 1234567 --direction in --protocol tcp --port 8080 --source-ip 1.2.3.4 --action accept
+hrobot firewall delete-rule 1234567 --name "rule-name"
 
-# Enable rescue system for server:
-hrobot boot rescue enable 1234567
+# Rescue System
+hrobot server enable-rescue 1234567          # Enable Linux rescue
+hrobot server enable-rescue 1234567 --vkvm   # Enable VNC rescue
+hrobot server disable-rescue 1234567         # Disable rescue
 
-# Boot the system (to enable rescue system)
-hrobot reset trigger 1234567 hw
+# Server Auctions
+hrobot auction list                          # List auction servers
+hrobot auction list --location FSN1          # Filter by location
+hrobot auction list --gpu-only               # Show only GPU servers
+
+# SSH Keys
+hrobot ssh-key list                          # List SSH keys
+hrobot ssh-key create --name "mykey" --data "ssh-rsa ..."
+
+# Reverse DNS
+hrobot rdns list                             # List reverse DNS entries
+hrobot rdns set 1.2.3.4 hostname.example.com
 ```
+
+#### CLI Features
+
+##### Intelligent SSH Connection
+
+- Automatically checks if SSH port is accessible
+- Auto-configures firewall rules if needed
+- Waits for changes to propagate
+- Seamlessly opens SSH connection
+
+##### Smart Firewall Management
+
+- Detects pending firewall changes and waits automatically
+- Prevents duplicate rules
+- Provides helpful error messages for conflicts
+- Validates against Hetzner's 10-rule limit
+
+##### Convenience Commands
+
+- `allow-ssh`, `allow-https`, `allow-mosh`, `allow-all` - Quick access rules
+- `--my-ip` flag to auto-detect your public IP
+- Support for multiple IPs/CIDRs with `--source-ips`
 
 ## Development
 
