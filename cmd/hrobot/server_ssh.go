@@ -67,7 +67,7 @@ func sshToServer(ctx context.Context, client *hrobot.Client, serverID hrobot.Ser
 		} else {
 			// Step 5: Add SSH rule for current IP
 			fmt.Printf("adding SSH access rule for %s...\n", myIP)
-			err = allowSSH(ctx, client, serverID, []string{}, true)
+			err = allowSSH(ctx, client, serverID, []string{}, true, "", false)
 			if err != nil {
 				return fmt.Errorf("failed to add SSH firewall rule: %w", err)
 			}

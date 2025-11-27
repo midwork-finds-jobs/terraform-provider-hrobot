@@ -264,7 +264,7 @@ func getMyIP() (string, error) {
 
 // Phase 1: Essential convenience commands
 
-func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool) error {
+func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool, customName string, force bool) error {
 	ips := sourceIPs
 
 	if myIP {
@@ -280,23 +280,93 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return fmt.Errorf("no source IPs specified")
 	}
 
+	// Expand $USER in custom name
+	if customName != "" {
+		customName = strings.ReplaceAll(customName, "$USER", os.Getenv("USER"))
+	}
+
+	// Handle --force flag: delete existing rules with matching name
+	if force && customName != "" {
+		// Get current firewall config
+		fw, err := client.Firewall.Get(ctx, serverID)
+		if err != nil {
+			return fmt.Errorf("failed to get firewall: %w", err)
+		}
+
+		// Find and delete rules with matching names
+		var updatedRules []hrobot.FirewallRule
+		deletedCount := 0
+		for _, rule := range fw.Rules.Input {
+			if strings.HasPrefix(rule.Name, customName) {
+				deletedCount++
+				fmt.Printf("⊘ removing existing rule: %s\n", rule.Name)
+			} else {
+				updatedRules = append(updatedRules, rule)
+			}
+		}
+
+		if deletedCount > 0 {
+			// Update firewall to remove old rules
+			updateConfig := hrobot.UpdateConfig{
+				Status:       fw.Status,
+				WhitelistHOS: fw.WhitelistHOS,
+				FilterIPv6:   fw.FilterIPv6,
+				Rules: hrobot.FirewallRules{
+					Input:  filterAutoAddedRules(updatedRules),
+					Output: filterAutoAddedRules(fw.Rules.Output),
+				},
+			}
+			_, err = client.Firewall.Update(ctx, serverID, updateConfig)
+			if err != nil {
+				return fmt.Errorf("failed to remove existing rules: %w", err)
+			}
+			fmt.Printf("✓ removed %d existing rule(s)\n", deletedCount)
+		}
+	}
+
+	// Build SSH rules (TCP and UDP for ports 22,32768-65535)
 	var rules []hrobot.FirewallRule
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
-		// Extract just the IP for the name (without CIDR)
 		nameIP := ip
 		if strings.Contains(ip, "/") {
 			nameIP = strings.Split(ip, "/")[0]
 		}
-		rule := hrobot.FirewallRule{
-			Name:      fmt.Sprintf("Allow SSH %s", nameIP),
+
+		// Determine rule name
+		var ruleName string
+		if customName != "" {
+			ruleName = fmt.Sprintf("%s TCP", customName)
+		} else {
+			ruleName = fmt.Sprintf("Allow SSH %s", nameIP)
+		}
+
+		// TCP rule for ports 22,32768-65535
+		tcpRule := hrobot.FirewallRule{
+			Name:      ruleName,
 			IPVersion: ipVersion,
 			Action:    hrobot.ActionAccept,
 			Protocol:  hrobot.ProtocolTCP,
 			SourceIP:  ip,
-			DestPort:  "22",
+			DestPort:  "22,32768-65535",
 		}
-		rules = append(rules, rule)
+		rules = append(rules, tcpRule)
+
+		// UDP rule for ports 22,32768-65535
+		if customName != "" {
+			ruleName = fmt.Sprintf("%s UDP", customName)
+		} else {
+			ruleName = fmt.Sprintf("Allow SSH %s UDP", nameIP)
+		}
+		udpRule := hrobot.FirewallRule{
+			Name:      ruleName,
+			IPVersion: ipVersion,
+			Action:    hrobot.ActionAccept,
+			Protocol:  hrobot.ProtocolUDP,
+			SourceIP:  ip,
+			DestPort:  "22,32768-65535",
+		}
+		rules = append(rules, udpRule)
 	}
 
 	info, err := addFirewallRules(ctx, client, serverID, rules)
@@ -304,11 +374,10 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return err
 	}
 
-	// Only show success message if rules were actually added
 	if info.Added > 0 {
 		fmt.Printf("✓ successfully added %d SSH rule(s)\n", info.Added)
 		for _, ip := range ips {
-			fmt.Printf("  - allowed SSH from %s\n", ip)
+			fmt.Printf("  - allowed SSH from %s (TCP+UDP ports 22,32768-65535)\n", ip)
 		}
 		fmt.Println("\nnote: firewall changes may take 30-40 seconds to apply")
 	}
@@ -356,8 +425,7 @@ func allowHTTPS(ctx context.Context, client *hrobot.Client, serverID hrobot.Serv
 	return nil
 }
 
-func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool) error {
-	// Determine IPs
+func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool, customName string, force bool) error {
 	ips := sourceIPs
 	if myIP {
 		ip, err := getMyIP()
@@ -372,10 +440,49 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		return fmt.Errorf("no source IPs specified")
 	}
 
-	// Build all MOSH rules (SSH TCP, MOSH UDP, TCP established)
-	var rules []hrobot.FirewallRule
+	// Expand $USER in custom name
+	if customName != "" {
+		customName = strings.ReplaceAll(customName, "$USER", os.Getenv("USER"))
+	}
 
-	// Add SSH rules
+	// Handle --force flag: delete existing rules with matching name
+	if force && customName != "" {
+		fw, err := client.Firewall.Get(ctx, serverID)
+		if err != nil {
+			return fmt.Errorf("failed to get firewall: %w", err)
+		}
+
+		var updatedRules []hrobot.FirewallRule
+		deletedCount := 0
+		for _, rule := range fw.Rules.Input {
+			if strings.HasPrefix(rule.Name, customName) {
+				deletedCount++
+				fmt.Printf("⊘ removing existing rule: %s\n", rule.Name)
+			} else {
+				updatedRules = append(updatedRules, rule)
+			}
+		}
+
+		if deletedCount > 0 {
+			updateConfig := hrobot.UpdateConfig{
+				Status:       fw.Status,
+				WhitelistHOS: fw.WhitelistHOS,
+				FilterIPv6:   fw.FilterIPv6,
+				Rules: hrobot.FirewallRules{
+					Input:  filterAutoAddedRules(updatedRules),
+					Output: filterAutoAddedRules(fw.Rules.Output),
+				},
+			}
+			_, err = client.Firewall.Update(ctx, serverID, updateConfig)
+			if err != nil {
+				return fmt.Errorf("failed to remove existing rules: %w", err)
+			}
+			fmt.Printf("✓ removed %d existing rule(s)\n", deletedCount)
+		}
+	}
+
+	// Build MOSH rules (TCP and UDP for ports 22,32768-65535,60000-61000)
+	var rules []hrobot.FirewallRule
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
 		nameIP := ip
@@ -383,55 +490,49 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 			nameIP = strings.Split(ip, "/")[0]
 		}
 
-		// SSH rule (TCP port 22)
-		sshRule := hrobot.FirewallRule{
-			Name:      fmt.Sprintf("Allow SSH %s", nameIP),
+		// Determine rule names
+		var tcpRuleName, udpRuleName string
+		if customName != "" {
+			tcpRuleName = fmt.Sprintf("%s TCP", customName)
+			udpRuleName = fmt.Sprintf("%s UDP", customName)
+		} else {
+			tcpRuleName = fmt.Sprintf("MOSH %s TCP", nameIP)
+			udpRuleName = fmt.Sprintf("MOSH %s UDP", nameIP)
+		}
+
+		// TCP rule for ports 22,32768-65535,60000-61000
+		tcpRule := hrobot.FirewallRule{
+			Name:      tcpRuleName,
 			IPVersion: ipVersion,
 			Action:    hrobot.ActionAccept,
 			Protocol:  hrobot.ProtocolTCP,
 			SourceIP:  ip,
-			DestPort:  "22",
+			DestPort:  "22,32768-65535,60000-61000",
 		}
-		rules = append(rules, sshRule)
+		rules = append(rules, tcpRule)
 
-		// MOSH UDP rule (ports 60000-61000)
-		moshRule := hrobot.FirewallRule{
-			Name:      fmt.Sprintf("MOSH UDP %s", nameIP),
+		// UDP rule for ports 22,32768-65535,60000-61000
+		udpRule := hrobot.FirewallRule{
+			Name:      udpRuleName,
 			IPVersion: ipVersion,
 			Action:    hrobot.ActionAccept,
 			Protocol:  hrobot.ProtocolUDP,
 			SourceIP:  ip,
-			DestPort:  "60000-61000",
+			DestPort:  "22,32768-65535,60000-61000",
 		}
-		rules = append(rules, moshRule)
+		rules = append(rules, udpRule)
 	}
 
-	// Add TCP established rule (allows return traffic for established connections)
-	// Only add IPv4 version as it covers most use cases
-	tcpEstablishedRule := hrobot.FirewallRule{
-		Name:      "TCP established",
-		IPVersion: hrobot.IPv4,
-		Action:    hrobot.ActionAccept,
-		Protocol:  hrobot.ProtocolTCP,
-		DestPort:  "32768-65535",
-		TCPFlags:  "ack",
-	}
-	rules = append(rules, tcpEstablishedRule)
-
-	// Add all rules at once
 	info, err := addFirewallRules(ctx, client, serverID, rules)
 	if err != nil {
 		return err
 	}
 
-	// Show summary of what was added
 	if info.Added > 0 {
 		fmt.Printf("\n✓ successfully configured MOSH access (%d rule(s) added)\n", info.Added)
 		for _, ip := range ips {
-			fmt.Printf("  - SSH from %s\n", ip)
-			fmt.Printf("  - MOSH UDP (60000-61000) from %s\n", ip)
+			fmt.Printf("  - allowed MOSH from %s (TCP+UDP ports 22,32768-65535,60000-61000)\n", ip)
 		}
-		fmt.Printf("  - TCP established connections\n")
 		fmt.Println("\nnote: firewall changes may take 30-40 seconds to apply")
 	}
 
@@ -446,8 +547,7 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 	return nil
 }
 
-func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool) error {
-	// Determine IPs
+func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool, customName string, force bool) error {
 	ips := sourceIPs
 	if myIP {
 		ip, err := getMyIP()
@@ -462,7 +562,48 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return fmt.Errorf("no source IPs specified")
 	}
 
-	// Build rules that allow ALL traffic
+	// Expand $USER in custom name
+	if customName != "" {
+		customName = strings.ReplaceAll(customName, "$USER", os.Getenv("USER"))
+	}
+
+	// Handle --force flag: delete existing rules with matching name
+	if force && customName != "" {
+		fw, err := client.Firewall.Get(ctx, serverID)
+		if err != nil {
+			return fmt.Errorf("failed to get firewall: %w", err)
+		}
+
+		var updatedRules []hrobot.FirewallRule
+		deletedCount := 0
+		for _, rule := range fw.Rules.Input {
+			if strings.HasPrefix(rule.Name, customName) {
+				deletedCount++
+				fmt.Printf("⊘ removing existing rule: %s\n", rule.Name)
+			} else {
+				updatedRules = append(updatedRules, rule)
+			}
+		}
+
+		if deletedCount > 0 {
+			updateConfig := hrobot.UpdateConfig{
+				Status:       fw.Status,
+				WhitelistHOS: fw.WhitelistHOS,
+				FilterIPv6:   fw.FilterIPv6,
+				Rules: hrobot.FirewallRules{
+					Input:  filterAutoAddedRules(updatedRules),
+					Output: filterAutoAddedRules(fw.Rules.Output),
+				},
+			}
+			_, err = client.Firewall.Update(ctx, serverID, updateConfig)
+			if err != nil {
+				return fmt.Errorf("failed to remove existing rules: %w", err)
+			}
+			fmt.Printf("✓ removed %d existing rule(s)\n", deletedCount)
+		}
+	}
+
+	// Build rules that allow ALL traffic (TCP and UDP on all ports)
 	var rules []hrobot.FirewallRule
 
 	for _, ip := range ips {
@@ -472,28 +613,46 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 			nameIP = strings.Split(ip, "/")[0]
 		}
 
-		// Create rule allowing all traffic from the IP (no protocol/port restrictions)
-		rule := hrobot.FirewallRule{
-			Name:      fmt.Sprintf("Allow all %s", nameIP),
+		// Determine rule names
+		var tcpRuleName, udpRuleName string
+		if customName != "" {
+			tcpRuleName = fmt.Sprintf("%s TCP", customName)
+			udpRuleName = fmt.Sprintf("%s UDP", customName)
+		} else {
+			tcpRuleName = fmt.Sprintf("Allow all %s TCP", nameIP)
+			udpRuleName = fmt.Sprintf("Allow all %s UDP", nameIP)
+		}
+
+		// TCP rule allowing all ports
+		tcpRule := hrobot.FirewallRule{
+			Name:      tcpRuleName,
 			IPVersion: ipVersion,
 			Action:    hrobot.ActionAccept,
+			Protocol:  hrobot.ProtocolTCP,
 			SourceIP:  ip,
-			// No Protocol, DestPort, or other restrictions = allow all
 		}
-		rules = append(rules, rule)
+		rules = append(rules, tcpRule)
+
+		// UDP rule allowing all ports
+		udpRule := hrobot.FirewallRule{
+			Name:      udpRuleName,
+			IPVersion: ipVersion,
+			Action:    hrobot.ActionAccept,
+			Protocol:  hrobot.ProtocolUDP,
+			SourceIP:  ip,
+		}
+		rules = append(rules, udpRule)
 	}
 
-	// Add all rules at once
 	info, err := addFirewallRules(ctx, client, serverID, rules)
 	if err != nil {
 		return err
 	}
 
-	// Show summary of what was added
 	if info.Added > 0 {
 		fmt.Printf("\n✓ successfully configured allow-all access (%d rule(s) added)\n", info.Added)
 		for _, ip := range ips {
-			fmt.Printf("  - Allow ALL traffic from %s\n", ip)
+			fmt.Printf("  - Allow ALL traffic from %s (TCP+UDP all ports)\n", ip)
 		}
 		fmt.Println("\nwarning: these rules allow unrestricted access from the specified IPs")
 		fmt.Println("note: firewall changes may take 30-40 seconds to apply")

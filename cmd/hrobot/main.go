@@ -596,13 +596,18 @@ func parseFlagBool(args []string, flag string) bool {
 // Phase 1 command handlers.
 func handleAllowSSH(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 4 {
-		fmt.Printf("Usage: %s firewall allow-ssh <server-id> --source-ips <ips> | --my-ip\n\n", os.Args[0])
+		fmt.Printf("Usage: %s firewall allow-ssh <server-id> --source-ips <ips> | --my-ip [--name <name>] [--force]\n\n", os.Args[0])
 		fmt.Println("allow SSH access from specific IPs")
 		fmt.Println("\nArguments:")
 		fmt.Println("  <server-id>    The server number")
 		fmt.Println("\nFlags:")
 		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs")
 		fmt.Println("  --my-ip        Use your current public IP")
+		fmt.Println("  --name         Custom name for firewall rules (supports $USER expansion)")
+		fmt.Println("  --force        Replace existing rules with same name")
+		fmt.Println("\nCreates 2 rules per IP:")
+		fmt.Println("  • TCP ports: 22,32768-65535")
+		fmt.Println("  • UDP ports: 22,32768-65535")
 		return nil
 	}
 
@@ -613,8 +618,10 @@ func handleAllowSSH(ctx context.Context, client *hrobot.Client) error {
 
 	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
 	myIP := parseFlagBool(os.Args, "--my-ip")
+	customName := parseFlagString(os.Args, "--name")
+	force := parseFlagBool(os.Args, "--force")
 
-	return enhanceAuthError(allowSSH(ctx, client, serverID, sourceIPs, myIP))
+	return enhanceAuthError(allowSSH(ctx, client, serverID, sourceIPs, myIP, customName, force))
 }
 
 func handleAllowHTTPS(ctx context.Context, client *hrobot.Client) error {
@@ -643,17 +650,18 @@ func handleAllowHTTPS(ctx context.Context, client *hrobot.Client) error {
 
 func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 4 {
-		fmt.Printf("Usage: %s firewall allow-mosh <server-id> --source-ips <ips> | --my-ip\n\n", os.Args[0])
+		fmt.Printf("Usage: %s firewall allow-mosh <server-id> --source-ips <ips> | --my-ip [--name <name>] [--force]\n\n", os.Args[0])
 		fmt.Println("allow MOSH access from specific IPs")
 		fmt.Println("\nArguments:")
 		fmt.Println("  <server-id>    The server number")
 		fmt.Println("\nFlags:")
 		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs")
 		fmt.Println("  --my-ip        Use your current public IP")
-		fmt.Println("\nCreates 3 rules per IP:")
-		fmt.Println("  • SSH (TCP port 22)")
-		fmt.Println("  • MOSH (UDP ports 60000-61000)")
-		fmt.Println("  • TCP established (ACK, ports 32768-65535)")
+		fmt.Println("  --name         Custom name for firewall rules (supports $USER expansion)")
+		fmt.Println("  --force        Replace existing rules with same name")
+		fmt.Println("\nCreates 2 rules per IP:")
+		fmt.Println("  • TCP ports: 22,32768-65535,60000-61000")
+		fmt.Println("  • UDP ports: 22,32768-65535,60000-61000")
 		return nil
 	}
 
@@ -664,20 +672,27 @@ func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
 
 	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
 	myIP := parseFlagBool(os.Args, "--my-ip")
+	customName := parseFlagString(os.Args, "--name")
+	force := parseFlagBool(os.Args, "--force")
 
-	return enhanceAuthError(allowMOSH(ctx, client, serverID, sourceIPs, myIP))
+	return enhanceAuthError(allowMOSH(ctx, client, serverID, sourceIPs, myIP, customName, force))
 }
 
 func handleAllowAll(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 4 {
-		fmt.Printf("Usage: %s firewall allow-all <server-id> --source-ips <ips> | --my-ip\n\n", os.Args[0])
+		fmt.Printf("Usage: %s firewall allow-all <server-id> --source-ips <ips> | --my-ip [--name <name>] [--force]\n\n", os.Args[0])
 		fmt.Println("allow access to all ports from specific IPs")
 		fmt.Println("\nArguments:")
 		fmt.Println("  <server-id>    The server number")
 		fmt.Println("\nFlags:")
 		fmt.Println("  --source-ips   Comma-separated list of IPs/CIDRs")
 		fmt.Println("  --my-ip        Use your current public IP")
-		fmt.Println("\nWarning: This creates a rule allowing ALL traffic from the specified IP(s).")
+		fmt.Println("  --name         Custom name for firewall rules (supports $USER expansion)")
+		fmt.Println("  --force        Replace existing rules with same name")
+		fmt.Println("\nCreates 2 rules per IP:")
+		fmt.Println("  • TCP: all ports")
+		fmt.Println("  • UDP: all ports")
+		fmt.Println("\nWarning: This creates rules allowing ALL traffic from the specified IP(s).")
 		fmt.Println("         Use only for fully trusted sources.")
 		return nil
 	}
@@ -689,8 +704,10 @@ func handleAllowAll(ctx context.Context, client *hrobot.Client) error {
 
 	sourceIPs := parseFlagStringSlice(os.Args, "--source-ips")
 	myIP := parseFlagBool(os.Args, "--my-ip")
+	customName := parseFlagString(os.Args, "--name")
+	force := parseFlagBool(os.Args, "--force")
 
-	return enhanceAuthError(allowAll(ctx, client, serverID, sourceIPs, myIP))
+	return enhanceAuthError(allowAll(ctx, client, serverID, sourceIPs, myIP, customName, force))
 }
 
 func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
