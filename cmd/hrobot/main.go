@@ -14,6 +14,11 @@ import (
 	"github.com/midwork-finds-jobs/terraform-provider-hrobot/pkg/hrobot"
 )
 
+var (
+	version = "dev"
+	commit  = "unknown"
+)
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -40,6 +45,12 @@ func run() error {
 	// Handle help flag
 	if command == "--help" || command == "-h" || command == "help" {
 		printHelp()
+		return nil
+	}
+
+	// Handle version flag
+	if command == "--version" || command == "-v" || command == "version" {
+		fmt.Printf("hrobot version %s (commit: %s)\n", version, commit)
 		return nil
 	}
 

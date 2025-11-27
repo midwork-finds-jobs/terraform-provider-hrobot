@@ -103,6 +103,7 @@ Usage:
 
 Available Commands:
   help                                       Show this help message
+  version                                    Show version information
 
   Server Commands:
     server list                              List all servers
