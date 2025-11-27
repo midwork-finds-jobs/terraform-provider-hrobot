@@ -605,9 +605,8 @@ func handleAllowSSH(ctx context.Context, client *hrobot.Client) error {
 		fmt.Println("  --my-ip        Use your current public IP")
 		fmt.Println("  --name         Custom name for firewall rules (supports $USER expansion)")
 		fmt.Println("  --force        Replace existing rules with same name")
-		fmt.Println("\nCreates 2 rules per IP:")
-		fmt.Println("  • TCP ports: 22,32768-65535")
-		fmt.Println("  • UDP ports: 22,32768-65535")
+		fmt.Println("\nCreates 1 rule per IP:")
+		fmt.Println("  • TCP+UDP ports: 22,32768-65535")
 		return nil
 	}
 
@@ -659,9 +658,8 @@ func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
 		fmt.Println("  --my-ip        Use your current public IP")
 		fmt.Println("  --name         Custom name for firewall rules (supports $USER expansion)")
 		fmt.Println("  --force        Replace existing rules with same name")
-		fmt.Println("\nCreates 2 rules per IP:")
-		fmt.Println("  • TCP ports: 22,32768-65535,60000-61000")
-		fmt.Println("  • UDP ports: 22,32768-65535,60000-61000")
+		fmt.Println("\nCreates 1 rule per IP:")
+		fmt.Println("  • TCP+UDP ports: 22,32768-65535 (includes MOSH 60000-61000)")
 		return nil
 	}
 
@@ -689,9 +687,8 @@ func handleAllowAll(ctx context.Context, client *hrobot.Client) error {
 		fmt.Println("  --my-ip        Use your current public IP")
 		fmt.Println("  --name         Custom name for firewall rules (supports $USER expansion)")
 		fmt.Println("  --force        Replace existing rules with same name")
-		fmt.Println("\nCreates 2 rules per IP:")
-		fmt.Println("  • TCP: all ports")
-		fmt.Println("  • UDP: all ports")
+		fmt.Println("\nCreates 1 rule per IP:")
+		fmt.Println("  • TCP+UDP: all ports")
 		fmt.Println("\nWarning: This creates rules allowing ALL traffic from the specified IP(s).")
 		fmt.Println("         Use only for fully trusted sources.")
 		return nil
