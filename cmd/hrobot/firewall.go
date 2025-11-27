@@ -285,48 +285,9 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		customName = strings.ReplaceAll(customName, "$USER", os.Getenv("USER"))
 	}
 
-	// Handle --force flag: delete existing rules with matching name
-	if force && customName != "" {
-		// Get current firewall config
-		fw, err := client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall: %w", err)
-		}
-
-		// Find and delete rules with matching names
-		var updatedRules []hrobot.FirewallRule
-		deletedCount := 0
-		for _, rule := range fw.Rules.Input {
-			if strings.HasPrefix(rule.Name, customName) {
-				deletedCount++
-				fmt.Printf("⊘ removing existing rule: %s\n", rule.Name)
-			} else {
-				updatedRules = append(updatedRules, rule)
-			}
-		}
-
-		if deletedCount > 0 {
-			// Update firewall to remove old rules
-			updateConfig := hrobot.UpdateConfig{
-				Status:       fw.Status,
-				WhitelistHOS: fw.WhitelistHOS,
-				FilterIPv6:   fw.FilterIPv6,
-				Rules: hrobot.FirewallRules{
-					Input:  filterAutoAddedRules(updatedRules),
-					Output: filterAutoAddedRules(fw.Rules.Output),
-				},
-			}
-			_, err = client.Firewall.Update(ctx, serverID, updateConfig)
-			if err != nil {
-				return fmt.Errorf("failed to remove existing rules: %w", err)
-			}
-			fmt.Printf("✓ removed %d existing rule(s)\n", deletedCount)
-		}
-	}
-
 	// Build SSH rules (TCP and UDP for ports 22,32768-65535)
 	// No protocol specified = allows both TCP and UDP
-	var rules []hrobot.FirewallRule
+	var newRules []hrobot.FirewallRule
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
 		nameIP := ip
@@ -350,16 +311,103 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 			SourceIP:  ip,
 			DestPort:  "22,32768-65535",
 		}
-		rules = append(rules, rule)
+		newRules = append(newRules, rule)
 	}
 
-	info, err := addFirewallRules(ctx, client, serverID, rules)
+	// Get current firewall config
+	fw, err := client.Firewall.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get firewall: %w", err)
+	}
+
+	// Ensure firewall is ready
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
 	if err != nil {
 		return err
 	}
 
-	if info.Added > 0 {
-		fmt.Printf("✓ successfully added %d SSH rule(s)\n", info.Added)
+	// Handle --force: remove existing rules with matching names in single operation
+	var filteredRules []hrobot.FirewallRule
+	deletedCount := 0
+	if force && customName != "" {
+		for _, rule := range fw.Rules.Input {
+			if strings.HasPrefix(rule.Name, customName) {
+				deletedCount++
+				fmt.Printf("⊘ replacing existing rule: %s\n", rule.Name)
+			} else {
+				filteredRules = append(filteredRules, rule)
+			}
+		}
+	} else {
+		filteredRules = fw.Rules.Input
+	}
+
+	// Filter duplicates and add new rules
+	var rulesToAdd []hrobot.FirewallRule
+	var skippedCount int
+	for _, newRule := range newRules {
+		if ruleExists(filteredRules, newRule) {
+			skippedCount++
+			fmt.Printf("⊘ skipping duplicate rule: %s\n", newRule.Name)
+		} else {
+			rulesToAdd = append(rulesToAdd, newRule)
+		}
+	}
+
+	// If nothing to add and nothing was deleted, we're done
+	if len(rulesToAdd) == 0 && deletedCount == 0 {
+		if skippedCount > 0 {
+			fmt.Printf("\nℹ all %d rule(s) already exist, no changes made\n", skippedCount)
+		}
+		return nil
+	}
+
+	// Check firewall rule limit
+	const maxFirewallRules = 10
+	filteredInput := filterAutoAddedRules(filteredRules)
+	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+	if totalRulesAfter > maxFirewallRules {
+		return fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
+
+Current rules: %d
+Trying to add: %d
+Total would be: %d
+Maximum allowed: %d inbound rules
+
+To resolve this:
+  1. List existing rules: hrobot firewall list-rules %d
+  2. Delete %d rule(s) you don't need: hrobot firewall delete-rule %d --index <N>
+  3. Try adding your rules again
+
+Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
+			len(rulesToAdd), len(filteredInput), len(rulesToAdd), totalRulesAfter, maxFirewallRules,
+			serverID, totalRulesAfter-maxFirewallRules, serverID)
+	}
+
+	// Single update with both deletions and additions
+	updatedRules := append(rulesToAdd, filteredInput...)
+	updateConfig := hrobot.UpdateConfig{
+		Status:       fw.Status,
+		WhitelistHOS: fw.WhitelistHOS,
+		FilterIPv6:   fw.FilterIPv6,
+		Rules: hrobot.FirewallRules{
+			Input:  updatedRules,
+			Output: filterAutoAddedRules(fw.Rules.Output),
+		},
+	}
+
+	_, err = client.Firewall.Update(ctx, serverID, updateConfig)
+	if err != nil {
+		return fmt.Errorf("failed to update firewall: %w", err)
+	}
+
+	// Show success message
+	if len(rulesToAdd) > 0 {
+		if deletedCount > 0 {
+			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount, len(rulesToAdd))
+		} else {
+			fmt.Printf("\n✓ successfully added %d SSH rule(s)\n", len(rulesToAdd))
+		}
 		for _, ip := range ips {
 			fmt.Printf("  - %s (TCP+UDP ports 22,32768-65535)\n", ip)
 		}
@@ -429,46 +477,9 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		customName = strings.ReplaceAll(customName, "$USER", os.Getenv("USER"))
 	}
 
-	// Handle --force flag: delete existing rules with matching name
-	if force && customName != "" {
-		fw, err := client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall: %w", err)
-		}
-
-		var updatedRules []hrobot.FirewallRule
-		deletedCount := 0
-		for _, rule := range fw.Rules.Input {
-			if strings.HasPrefix(rule.Name, customName) {
-				deletedCount++
-				fmt.Printf("⊘ removing existing rule: %s\n", rule.Name)
-			} else {
-				updatedRules = append(updatedRules, rule)
-			}
-		}
-
-		if deletedCount > 0 {
-			updateConfig := hrobot.UpdateConfig{
-				Status:       fw.Status,
-				WhitelistHOS: fw.WhitelistHOS,
-				FilterIPv6:   fw.FilterIPv6,
-				Rules: hrobot.FirewallRules{
-					Input:  filterAutoAddedRules(updatedRules),
-					Output: filterAutoAddedRules(fw.Rules.Output),
-				},
-			}
-			_, err = client.Firewall.Update(ctx, serverID, updateConfig)
-			if err != nil {
-				return fmt.Errorf("failed to remove existing rules: %w", err)
-			}
-			fmt.Printf("✓ removed %d existing rule(s)\n", deletedCount)
-		}
-	}
-
 	// Build MOSH rules (TCP and UDP for ports 22,32768-65535,60000-61000)
-	// Note: Hetzner API limits port fields to 2 components, so we split into multiple rules
 	// No protocol specified = allows both TCP and UDP
-	var rules []hrobot.FirewallRule
+	var newRules []hrobot.FirewallRule
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
 		nameIP := ip
@@ -492,28 +503,107 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 			SourceIP:  ip,
 			DestPort:  "22,32768-65535",
 		}
-		rules = append(rules, rule)
+		newRules = append(newRules, rule)
 	}
 
-	info, err := addFirewallRules(ctx, client, serverID, rules)
+	// Get current firewall config
+	fw, err := client.Firewall.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get firewall: %w", err)
+	}
+
+	// Ensure firewall is ready
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
 	if err != nil {
 		return err
 	}
 
-	if info.Added > 0 {
-		fmt.Printf("\n✓ successfully configured MOSH access (%d rule(s) added)\n", info.Added)
+	// Handle --force: remove existing rules with matching names in single operation
+	var filteredRules []hrobot.FirewallRule
+	deletedCount := 0
+	if force && customName != "" {
+		for _, rule := range fw.Rules.Input {
+			if strings.HasPrefix(rule.Name, customName) {
+				deletedCount++
+				fmt.Printf("⊘ replacing existing rule: %s\n", rule.Name)
+			} else {
+				filteredRules = append(filteredRules, rule)
+			}
+		}
+	} else {
+		filteredRules = fw.Rules.Input
+	}
+
+	// Filter duplicates and add new rules
+	var rulesToAdd []hrobot.FirewallRule
+	var skippedCount int
+	for _, newRule := range newRules {
+		if ruleExists(filteredRules, newRule) {
+			skippedCount++
+			fmt.Printf("⊘ skipping duplicate rule: %s\n", newRule.Name)
+		} else {
+			rulesToAdd = append(rulesToAdd, newRule)
+		}
+	}
+
+	// If nothing to add and nothing was deleted, we're done
+	if len(rulesToAdd) == 0 && deletedCount == 0 {
+		if skippedCount > 0 {
+			fmt.Printf("\nℹ all %d rule(s) already exist, no changes made\n", skippedCount)
+		}
+		return nil
+	}
+
+	// Check firewall rule limit
+	const maxFirewallRules = 10
+	filteredInput := filterAutoAddedRules(filteredRules)
+	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+	if totalRulesAfter > maxFirewallRules {
+		return fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
+
+Current rules: %d
+Trying to add: %d
+Total would be: %d
+Maximum allowed: %d inbound rules
+
+To resolve this:
+  1. List existing rules: hrobot firewall list-rules %d
+  2. Delete %d rule(s) you don't need: hrobot firewall delete-rule %d --index <N>
+  3. Try adding your rules again
+
+Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
+			len(rulesToAdd), len(filteredInput), len(rulesToAdd), totalRulesAfter, maxFirewallRules,
+			serverID, totalRulesAfter-maxFirewallRules, serverID)
+	}
+
+	// Single update with both deletions and additions
+	updatedRules := append(rulesToAdd, filteredInput...)
+	updateConfig := hrobot.UpdateConfig{
+		Status:       fw.Status,
+		WhitelistHOS: fw.WhitelistHOS,
+		FilterIPv6:   fw.FilterIPv6,
+		Rules: hrobot.FirewallRules{
+			Input:  updatedRules,
+			Output: filterAutoAddedRules(fw.Rules.Output),
+		},
+	}
+
+	_, err = client.Firewall.Update(ctx, serverID, updateConfig)
+	if err != nil {
+		return fmt.Errorf("failed to update firewall: %w", err)
+	}
+
+	// Show success message
+	if len(rulesToAdd) > 0 {
+		if deletedCount > 0 {
+			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount, len(rulesToAdd))
+		} else {
+			fmt.Printf("\n✓ successfully configured MOSH access (%d rule(s) added)\n", len(rulesToAdd))
+		}
 		for _, ip := range ips {
 			fmt.Printf("  - %s (TCP+UDP ports 22,32768-65535)\n", ip)
 		}
 		fmt.Println("\nnote: firewall changes may take 30-40 seconds to apply")
-	}
-
-	if info.Skipped > 0 {
-		fmt.Printf("\nℹ %d rule(s) already existed\n", info.Skipped)
-	}
-
-	if info.Added == 0 && info.Skipped > 0 {
-		fmt.Println("\n✓ MOSH already configured for this IP")
 	}
 
 	return nil
@@ -539,45 +629,9 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		customName = strings.ReplaceAll(customName, "$USER", os.Getenv("USER"))
 	}
 
-	// Handle --force flag: delete existing rules with matching name
-	if force && customName != "" {
-		fw, err := client.Firewall.Get(ctx, serverID)
-		if err != nil {
-			return fmt.Errorf("failed to get firewall: %w", err)
-		}
-
-		var updatedRules []hrobot.FirewallRule
-		deletedCount := 0
-		for _, rule := range fw.Rules.Input {
-			if strings.HasPrefix(rule.Name, customName) {
-				deletedCount++
-				fmt.Printf("⊘ removing existing rule: %s\n", rule.Name)
-			} else {
-				updatedRules = append(updatedRules, rule)
-			}
-		}
-
-		if deletedCount > 0 {
-			updateConfig := hrobot.UpdateConfig{
-				Status:       fw.Status,
-				WhitelistHOS: fw.WhitelistHOS,
-				FilterIPv6:   fw.FilterIPv6,
-				Rules: hrobot.FirewallRules{
-					Input:  filterAutoAddedRules(updatedRules),
-					Output: filterAutoAddedRules(fw.Rules.Output),
-				},
-			}
-			_, err = client.Firewall.Update(ctx, serverID, updateConfig)
-			if err != nil {
-				return fmt.Errorf("failed to remove existing rules: %w", err)
-			}
-			fmt.Printf("✓ removed %d existing rule(s)\n", deletedCount)
-		}
-	}
-
 	// Build rules that allow ALL traffic (TCP and UDP on all ports)
 	// No protocol specified = allows both TCP and UDP
-	var rules []hrobot.FirewallRule
+	var newRules []hrobot.FirewallRule
 
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
@@ -602,29 +656,108 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 			SourceIP:  ip,
 			// No Protocol, DestPort = allow all
 		}
-		rules = append(rules, rule)
+		newRules = append(newRules, rule)
 	}
 
-	info, err := addFirewallRules(ctx, client, serverID, rules)
+	// Get current firewall config
+	fw, err := client.Firewall.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get firewall: %w", err)
+	}
+
+	// Ensure firewall is ready
+	fw, err = ensureFirewallReady(ctx, client, serverID, fw)
 	if err != nil {
 		return err
 	}
 
-	if info.Added > 0 {
-		fmt.Printf("\n✓ successfully configured allow-all access (%d rule(s) added)\n", info.Added)
+	// Handle --force: remove existing rules with matching names in single operation
+	var filteredRules []hrobot.FirewallRule
+	deletedCount := 0
+	if force && customName != "" {
+		for _, rule := range fw.Rules.Input {
+			if strings.HasPrefix(rule.Name, customName) {
+				deletedCount++
+				fmt.Printf("⊘ replacing existing rule: %s\n", rule.Name)
+			} else {
+				filteredRules = append(filteredRules, rule)
+			}
+		}
+	} else {
+		filteredRules = fw.Rules.Input
+	}
+
+	// Filter duplicates and add new rules
+	var rulesToAdd []hrobot.FirewallRule
+	var skippedCount int
+	for _, newRule := range newRules {
+		if ruleExists(filteredRules, newRule) {
+			skippedCount++
+			fmt.Printf("⊘ skipping duplicate rule: %s\n", newRule.Name)
+		} else {
+			rulesToAdd = append(rulesToAdd, newRule)
+		}
+	}
+
+	// If nothing to add and nothing was deleted, we're done
+	if len(rulesToAdd) == 0 && deletedCount == 0 {
+		if skippedCount > 0 {
+			fmt.Printf("\nℹ all %d rule(s) already exist, no changes made\n", skippedCount)
+		}
+		return nil
+	}
+
+	// Check firewall rule limit
+	const maxFirewallRules = 10
+	filteredInput := filterAutoAddedRules(filteredRules)
+	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+	if totalRulesAfter > maxFirewallRules {
+		return fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
+
+Current rules: %d
+Trying to add: %d
+Total would be: %d
+Maximum allowed: %d inbound rules
+
+To resolve this:
+  1. List existing rules: hrobot firewall list-rules %d
+  2. Delete %d rule(s) you don't need: hrobot firewall delete-rule %d --index <N>
+  3. Try adding your rules again
+
+Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
+			len(rulesToAdd), len(filteredInput), len(rulesToAdd), totalRulesAfter, maxFirewallRules,
+			serverID, totalRulesAfter-maxFirewallRules, serverID)
+	}
+
+	// Single update with both deletions and additions
+	updatedRules := append(rulesToAdd, filteredInput...)
+	updateConfig := hrobot.UpdateConfig{
+		Status:       fw.Status,
+		WhitelistHOS: fw.WhitelistHOS,
+		FilterIPv6:   fw.FilterIPv6,
+		Rules: hrobot.FirewallRules{
+			Input:  updatedRules,
+			Output: filterAutoAddedRules(fw.Rules.Output),
+		},
+	}
+
+	_, err = client.Firewall.Update(ctx, serverID, updateConfig)
+	if err != nil {
+		return fmt.Errorf("failed to update firewall: %w", err)
+	}
+
+	// Show success message
+	if len(rulesToAdd) > 0 {
+		if deletedCount > 0 {
+			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount, len(rulesToAdd))
+		} else {
+			fmt.Printf("\n✓ successfully configured allow-all access (%d rule(s) added)\n", len(rulesToAdd))
+		}
 		for _, ip := range ips {
 			fmt.Printf("  - %s (TCP+UDP all ports)\n", ip)
 		}
 		fmt.Println("\nwarning: these rules allow unrestricted access from the specified IPs")
 		fmt.Println("note: firewall changes may take 30-40 seconds to apply")
-	}
-
-	if info.Skipped > 0 {
-		fmt.Printf("\nℹ %d rule(s) already existed\n", info.Skipped)
-	}
-
-	if info.Added == 0 && info.Skipped > 0 {
-		fmt.Println("\n✓ allow-all already configured for this IP")
 	}
 
 	return nil
