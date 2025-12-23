@@ -266,6 +266,7 @@ func getMyIP() (string, error) {
 
 func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool, customName string, force bool) error {
 	ips := sourceIPs
+	usingMyIP := myIP
 
 	if myIP {
 		ip, err := getMyIP()
@@ -287,6 +288,7 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 
 	// Build SSH rules (TCP and UDP for ports 22,32768-65535)
 	// No protocol specified = allows both TCP and UDP
+	user := os.Getenv("USER")
 	var newRules []hrobot.FirewallRule
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
@@ -299,6 +301,8 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		var ruleName string
 		if customName != "" {
 			ruleName = customName
+		} else if usingMyIP && user != "" {
+			ruleName = fmt.Sprintf("Allow %s from %s", user, nameIP)
 		} else {
 			ruleName = fmt.Sprintf("Allow SSH %s", nameIP)
 		}
@@ -376,10 +380,32 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return nil
 	}
 
-	// Check firewall rule limit
+	// Check firewall rule limit and auto-cleanup old user rules if needed
 	const maxFirewallRules = 10
 	filteredInput := filterAutoAddedRules(filteredRules)
 	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+
+	// If over limit and using --my-ip, try to remove oldest "Allow $USER from X.Y.Z.W" rule
+	userRulePrefix := fmt.Sprintf("Allow %s from ", user)
+	autoDeletedCount := 0
+	for totalRulesAfter > maxFirewallRules && usingMyIP && user != "" {
+		// Find oldest user rule (last in list = oldest, since new rules are prepended)
+		foundIdx := -1
+		for i := len(filteredInput) - 1; i >= 0; i-- {
+			if strings.HasPrefix(filteredInput[i].Name, userRulePrefix) {
+				foundIdx = i
+				break
+			}
+		}
+		if foundIdx == -1 {
+			break // No more user rules to delete
+		}
+		fmt.Printf("⊘ auto-removing old rule: %s\n", filteredInput[foundIdx].Name)
+		filteredInput = append(filteredInput[:foundIdx], filteredInput[foundIdx+1:]...)
+		autoDeletedCount++
+		totalRulesAfter = len(filteredInput) + len(rulesToAdd)
+	}
+
 	if totalRulesAfter > maxFirewallRules {
 		return fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
 
@@ -417,8 +443,8 @@ Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
 
 	// Show success message
 	if len(rulesToAdd) > 0 {
-		if deletedCount > 0 {
-			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount, len(rulesToAdd))
+		if deletedCount > 0 || autoDeletedCount > 0 {
+			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount+autoDeletedCount, len(rulesToAdd))
 		} else {
 			fmt.Printf("\n✓ successfully added %d SSH rule(s)\n", len(rulesToAdd))
 		}
@@ -473,6 +499,8 @@ func allowHTTPS(ctx context.Context, client *hrobot.Client, serverID hrobot.Serv
 
 func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool, customName string, force bool) error {
 	ips := sourceIPs
+	usingMyIP := myIP
+
 	if myIP {
 		ip, err := getMyIP()
 		if err != nil {
@@ -493,6 +521,7 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 
 	// Build MOSH rules (TCP and UDP for ports 22,32768-65535,60000-61000)
 	// No protocol specified = allows both TCP and UDP
+	user := os.Getenv("USER")
 	var newRules []hrobot.FirewallRule
 	for _, ip := range ips {
 		ipVersion := detectIPVersion(ip)
@@ -505,6 +534,8 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		var ruleName string
 		if customName != "" {
 			ruleName = customName
+		} else if usingMyIP && user != "" {
+			ruleName = fmt.Sprintf("Allow %s from %s", user, nameIP)
 		} else {
 			ruleName = fmt.Sprintf("MOSH %s", nameIP)
 		}
@@ -582,10 +613,32 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		return nil
 	}
 
-	// Check firewall rule limit
+	// Check firewall rule limit and auto-cleanup old user rules if needed
 	const maxFirewallRules = 10
 	filteredInput := filterAutoAddedRules(filteredRules)
 	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+
+	// If over limit and using --my-ip, try to remove oldest "Allow $USER from X.Y.Z.W" rule
+	userRulePrefix := fmt.Sprintf("Allow %s from ", user)
+	autoDeletedCount := 0
+	for totalRulesAfter > maxFirewallRules && usingMyIP && user != "" {
+		// Find oldest user rule (last in list = oldest, since new rules are prepended)
+		foundIdx := -1
+		for i := len(filteredInput) - 1; i >= 0; i-- {
+			if strings.HasPrefix(filteredInput[i].Name, userRulePrefix) {
+				foundIdx = i
+				break
+			}
+		}
+		if foundIdx == -1 {
+			break // No more user rules to delete
+		}
+		fmt.Printf("⊘ auto-removing old rule: %s\n", filteredInput[foundIdx].Name)
+		filteredInput = append(filteredInput[:foundIdx], filteredInput[foundIdx+1:]...)
+		autoDeletedCount++
+		totalRulesAfter = len(filteredInput) + len(rulesToAdd)
+	}
+
 	if totalRulesAfter > maxFirewallRules {
 		return fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
 
@@ -623,8 +676,8 @@ Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
 
 	// Show success message
 	if len(rulesToAdd) > 0 {
-		if deletedCount > 0 {
-			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount, len(rulesToAdd))
+		if deletedCount > 0 || autoDeletedCount > 0 {
+			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount+autoDeletedCount, len(rulesToAdd))
 		} else {
 			fmt.Printf("\n✓ successfully configured MOSH access (%d rule(s) added)\n", len(rulesToAdd))
 		}
@@ -639,6 +692,8 @@ Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
 
 func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, sourceIPs []string, myIP bool, customName string, force bool) error {
 	ips := sourceIPs
+	usingMyIP := myIP
+
 	if myIP {
 		ip, err := getMyIP()
 		if err != nil {
@@ -659,6 +714,7 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 
 	// Build rules that allow ALL traffic (TCP and UDP on all ports)
 	// No protocol specified = allows both TCP and UDP
+	user := os.Getenv("USER")
 	var newRules []hrobot.FirewallRule
 
 	for _, ip := range ips {
@@ -672,6 +728,8 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		var ruleName string
 		if customName != "" {
 			ruleName = customName
+		} else if usingMyIP && user != "" {
+			ruleName = fmt.Sprintf("Allow %s from %s", user, nameIP)
 		} else {
 			ruleName = fmt.Sprintf("Allow all %s", nameIP)
 		}
@@ -749,10 +807,32 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return nil
 	}
 
-	// Check firewall rule limit
+	// Check firewall rule limit and auto-cleanup old user rules if needed
 	const maxFirewallRules = 10
 	filteredInput := filterAutoAddedRules(filteredRules)
 	totalRulesAfter := len(filteredInput) + len(rulesToAdd)
+
+	// If over limit and using --my-ip, try to remove oldest "Allow $USER from X.Y.Z.W" rule
+	userRulePrefix := fmt.Sprintf("Allow %s from ", user)
+	autoDeletedCount := 0
+	for totalRulesAfter > maxFirewallRules && usingMyIP && user != "" {
+		// Find oldest user rule (last in list = oldest, since new rules are prepended)
+		foundIdx := -1
+		for i := len(filteredInput) - 1; i >= 0; i-- {
+			if strings.HasPrefix(filteredInput[i].Name, userRulePrefix) {
+				foundIdx = i
+				break
+			}
+		}
+		if foundIdx == -1 {
+			break // No more user rules to delete
+		}
+		fmt.Printf("⊘ auto-removing old rule: %s\n", filteredInput[foundIdx].Name)
+		filteredInput = append(filteredInput[:foundIdx], filteredInput[foundIdx+1:]...)
+		autoDeletedCount++
+		totalRulesAfter = len(filteredInput) + len(rulesToAdd)
+	}
+
 	if totalRulesAfter > maxFirewallRules {
 		return fmt.Errorf(`cannot add %d rule(s): would exceed firewall rule limit
 
@@ -790,8 +870,8 @@ Note: Hetzner enforces a maximum of 10 inbound firewall rules per server`,
 
 	// Show success message
 	if len(rulesToAdd) > 0 {
-		if deletedCount > 0 {
-			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount, len(rulesToAdd))
+		if deletedCount > 0 || autoDeletedCount > 0 {
+			fmt.Printf("\n✓ successfully replaced %d rule(s) with %d new rule(s)\n", deletedCount+autoDeletedCount, len(rulesToAdd))
 		} else {
 			fmt.Printf("\n✓ successfully configured allow-all access (%d rule(s) added)\n", len(rulesToAdd))
 		}
