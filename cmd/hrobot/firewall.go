@@ -326,12 +326,26 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return err
 	}
 
+	// Collect names we'll be adding (for --force matching)
+	newRuleNames := make(map[string]bool)
+	for _, r := range newRules {
+		newRuleNames[r.Name] = true
+	}
+
 	// Handle --force: remove existing rules with matching names in single operation
 	var filteredRules []hrobot.FirewallRule
 	deletedCount := 0
-	if force && customName != "" {
+	if force {
 		for _, rule := range fw.Rules.Input {
-			if strings.HasPrefix(rule.Name, customName) {
+			// Match by custom name prefix OR exact match with new rule names
+			shouldReplace := false
+			if customName != "" && strings.HasPrefix(rule.Name, customName) {
+				shouldReplace = true
+			} else if newRuleNames[rule.Name] {
+				shouldReplace = true
+			}
+
+			if shouldReplace {
 				deletedCount++
 				fmt.Printf("⊘ replacing existing rule: %s\n", rule.Name)
 			} else {
@@ -342,11 +356,11 @@ func allowSSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		filteredRules = fw.Rules.Input
 	}
 
-	// Filter duplicates and add new rules
+	// Filter duplicates (only if not using --force, since we already removed matching rules)
 	var rulesToAdd []hrobot.FirewallRule
 	var skippedCount int
 	for _, newRule := range newRules {
-		if ruleExists(filteredRules, newRule) {
+		if !force && ruleExists(filteredRules, newRule) {
 			skippedCount++
 			fmt.Printf("⊘ skipping duplicate rule: %s\n", newRule.Name)
 		} else {
@@ -518,12 +532,26 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		return err
 	}
 
+	// Collect names we'll be adding (for --force matching)
+	newRuleNames := make(map[string]bool)
+	for _, r := range newRules {
+		newRuleNames[r.Name] = true
+	}
+
 	// Handle --force: remove existing rules with matching names in single operation
 	var filteredRules []hrobot.FirewallRule
 	deletedCount := 0
-	if force && customName != "" {
+	if force {
 		for _, rule := range fw.Rules.Input {
-			if strings.HasPrefix(rule.Name, customName) {
+			// Match by custom name prefix OR exact match with new rule names
+			shouldReplace := false
+			if customName != "" && strings.HasPrefix(rule.Name, customName) {
+				shouldReplace = true
+			} else if newRuleNames[rule.Name] {
+				shouldReplace = true
+			}
+
+			if shouldReplace {
 				deletedCount++
 				fmt.Printf("⊘ replacing existing rule: %s\n", rule.Name)
 			} else {
@@ -534,11 +562,11 @@ func allowMOSH(ctx context.Context, client *hrobot.Client, serverID hrobot.Serve
 		filteredRules = fw.Rules.Input
 	}
 
-	// Filter duplicates and add new rules
+	// Filter duplicates (only if not using --force, since we already removed matching rules)
 	var rulesToAdd []hrobot.FirewallRule
 	var skippedCount int
 	for _, newRule := range newRules {
-		if ruleExists(filteredRules, newRule) {
+		if !force && ruleExists(filteredRules, newRule) {
 			skippedCount++
 			fmt.Printf("⊘ skipping duplicate rule: %s\n", newRule.Name)
 		} else {
@@ -671,12 +699,26 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		return err
 	}
 
+	// Collect names we'll be adding (for --force matching)
+	newRuleNames := make(map[string]bool)
+	for _, r := range newRules {
+		newRuleNames[r.Name] = true
+	}
+
 	// Handle --force: remove existing rules with matching names in single operation
 	var filteredRules []hrobot.FirewallRule
 	deletedCount := 0
-	if force && customName != "" {
+	if force {
 		for _, rule := range fw.Rules.Input {
-			if strings.HasPrefix(rule.Name, customName) {
+			// Match by custom name prefix OR exact match with new rule names
+			shouldReplace := false
+			if customName != "" && strings.HasPrefix(rule.Name, customName) {
+				shouldReplace = true
+			} else if newRuleNames[rule.Name] {
+				shouldReplace = true
+			}
+
+			if shouldReplace {
 				deletedCount++
 				fmt.Printf("⊘ replacing existing rule: %s\n", rule.Name)
 			} else {
@@ -687,11 +729,11 @@ func allowAll(ctx context.Context, client *hrobot.Client, serverID hrobot.Server
 		filteredRules = fw.Rules.Input
 	}
 
-	// Filter duplicates and add new rules
+	// Filter duplicates (only if not using --force, since we already removed matching rules)
 	var rulesToAdd []hrobot.FirewallRule
 	var skippedCount int
 	for _, newRule := range newRules {
-		if ruleExists(filteredRules, newRule) {
+		if !force && ruleExists(filteredRules, newRule) {
 			skippedCount++
 			fmt.Printf("⊘ skipping duplicate rule: %s\n", newRule.Name)
 		} else {
