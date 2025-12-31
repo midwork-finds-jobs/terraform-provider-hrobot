@@ -140,7 +140,7 @@ Or use context management:
 // handleServerCommand handles all server-related subcommands.
 func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 	if len(os.Args) < 3 {
-		return fmt.Errorf("usage: %s server <subcommand>\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  wake <id>         - Wake server via WoL\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server\n  ssh <id>          - SSH into server with auto firewall config", os.Args[0])
+		return fmt.Errorf("usage: %s server <subcommand>\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  wake <id>         - Wake server via WoL\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server\n  ssh <id>          - SSH into server with auto firewall config\n  connect <id>      - Connect via SSH/mosh with smart firewall mgmt", os.Args[0])
 	}
 
 	subcommand := os.Args[2]
@@ -394,8 +394,40 @@ func handleServerCommand(ctx context.Context, client *hrobot.Client) error {
 		}
 		return enhanceAuthError(sshToServer(ctx, client, hrobot.ServerID(serverID), user))
 
+	case "connect":
+		if isHelpRequested() || len(os.Args) < 4 {
+			fmt.Printf("Usage: %s server connect <server-id> [--mosh] [--force] [--user <username>]\n\n", os.Args[0])
+			fmt.Println("Connect to server via SSH or mosh with automatic firewall management.")
+			fmt.Println("\nArguments:")
+			fmt.Println("  <server-id>    The server number to connect to")
+			fmt.Println("\nFlags:")
+			fmt.Println("  --mosh         Use mosh instead of SSH")
+			fmt.Println("  --force        Replace existing firewall rule for your IP")
+			fmt.Println("  --user         Username (default: root)")
+			fmt.Println("\nBehavior:")
+			fmt.Println("  1. Detects your current public IP")
+			fmt.Println("  2. Checks if IP is allowed in firewall")
+			fmt.Println("  3. If --force or IP not allowed: replaces old rule with new one")
+			fmt.Println("  4. Waits for firewall changes to apply")
+			fmt.Println("  5. Connects via ssh or mosh")
+			printGlobalFlags()
+			return nil
+		}
+		serverIDStr := os.Args[3]
+		serverID, err := strconv.Atoi(serverIDStr)
+		if err != nil {
+			return fmt.Errorf("invalid server ID: %s", serverIDStr)
+		}
+		user := parseFlagString(os.Args, "--user")
+		if user == "" {
+			user = "root"
+		}
+		useMosh := parseFlagBool(os.Args, "--mosh")
+		force := parseFlagBool(os.Args, "--force")
+		return enhanceAuthError(connectToServer(ctx, client, hrobot.ServerID(serverID), user, useMosh, force))
+
 	default:
-		return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  wake <id>         - Wake server via WoL\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server\n  ssh <id>          - SSH into server with auto firewall config", subcommand)
+		return fmt.Errorf("unknown server subcommand: %s\nSubcommands:\n  list              - List all servers\n  describe <id>     - Describe server details by ID\n  reboot <id>       - Reboot server (hardware reset)\n  shutdown <id>     - Shutdown server\n  poweron <id>      - Power on server\n  poweroff <id>     - Power off server\n  wake <id>         - Wake server via WoL\n  enable-rescue <id> - Enable rescue system\n  disable-rescue <id> - Disable rescue system\n  traffic <id>      - Show traffic statistics\n  images <id>       - Show boot/image configuration\n  install <id>      - Install operating system on server\n  ssh <id>          - SSH into server with auto firewall config\n  connect <id>      - Connect via SSH/mosh with smart firewall mgmt", subcommand)
 	}
 }
 

@@ -163,3 +163,107 @@ func execSSH(host, user string) error {
 	// This line will never be reached if exec succeeds
 	return nil
 }
+
+// execMOSH executes the mosh command to connect to the server.
+func execMOSH(host, user string) error {
+	// Find mosh binary
+	moshPath, err := exec.LookPath("mosh")
+	if err != nil {
+		return fmt.Errorf("mosh command not found in PATH: %w\n\nTo install mosh:\n  • macOS: brew install mosh\n  • Debian/Ubuntu: apt install mosh\n  • RHEL/Fedora: dnf install mosh", err)
+	}
+
+	// Prepare mosh command arguments
+	args := []string{"mosh", fmt.Sprintf("%s@%s", user, host)}
+
+	// Execute mosh, replacing current process
+	err = syscall.Exec(moshPath, args, os.Environ())
+	if err != nil {
+		return fmt.Errorf("failed to execute mosh: %w", err)
+	}
+
+	// This line will never be reached if exec succeeds
+	return nil
+}
+
+// connectToServer connects to a server via SSH or mosh, automatically managing firewall rules.
+func connectToServer(ctx context.Context, client *hrobot.Client, serverID hrobot.ServerID, user string, useMosh bool, force bool) error {
+	// Step 1: Get server details to obtain IP address
+	fmt.Printf("fetching server details for #%d...\n", serverID)
+	server, err := client.Server.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get server details: %w", err)
+	}
+
+	serverIP := server.ServerIP.String()
+	fmt.Printf("server IP: %s\n", serverIP)
+
+	// Step 2: Get current public IP
+	myIP, err := getMyIP()
+	if err != nil {
+		return fmt.Errorf("failed to detect your public IP: %w", err)
+	}
+	fmt.Printf("your public IP: %s\n", myIP)
+
+	// Step 3: Check firewall configuration
+	fw, err := client.Firewall.Get(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("failed to get firewall configuration: %w", err)
+	}
+
+	myIPWithCIDR := myIP + "/32"
+	hasAccess := checkIPInFirewallRules(fw.Rules.Input, myIPWithCIDR)
+
+	// Step 4: Update firewall rules if needed
+	// Only update if IP is not already in firewall
+	// The --force flag is passed to allowSSH/allowMOSH to handle replacing old rules
+	needsUpdate := !hasAccess
+
+	if needsUpdate {
+		if force {
+			fmt.Printf("your IP changed to %s, updating firewall rule...\n", myIP)
+		} else {
+			fmt.Printf("your IP %s is not in firewall rules, adding access...\n", myIP)
+		}
+
+		// Use allowMOSH or allowSSH with --force flag to replace existing rules
+		if useMosh {
+			err = allowMOSH(ctx, client, serverID, []string{}, true, "", force)
+		} else {
+			err = allowSSH(ctx, client, serverID, []string{}, true, "", force)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to configure firewall rule: %w", err)
+		}
+
+		// Step 5: Wait for firewall to be ready
+		fmt.Println("waiting for firewall changes to be applied...")
+		err = client.Firewall.WaitForFirewallReady(ctx, serverID)
+		if err != nil {
+			return fmt.Errorf("failed while waiting for firewall: %w", err)
+		}
+		fmt.Println("✓ firewall is ready")
+
+		// Give a bit more time for the rule to take effect
+		fmt.Println("waiting 5 seconds for rules to propagate...")
+		time.Sleep(5 * time.Second)
+	} else {
+		if force {
+			fmt.Printf("✓ your IP %s is already in firewall rules (no update needed)\n", myIP)
+		} else {
+			fmt.Printf("✓ your IP %s is already allowed in firewall rules\n", myIP)
+		}
+	}
+
+	// Step 6: Execute connection
+	protocol := "SSH"
+	if useMosh {
+		protocol = "mosh"
+	}
+	fmt.Printf("\nconnecting to %s@%s via %s...\n", user, serverIP, protocol)
+
+	if useMosh {
+		return execMOSH(serverIP, user)
+	}
+	return execSSH(serverIP, user)
+}
