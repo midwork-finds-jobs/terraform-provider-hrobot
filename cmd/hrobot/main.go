@@ -59,13 +59,13 @@ func run() error {
 		return handleContextCommand()
 	}
 
-	// Get credentials from context first, then fall back to environment
-	username, password := getCredentialsFromContext()
+	// Get credentials from environment first, then fall back to context
+	username := os.Getenv("HROBOT_USERNAME")
+	password := os.Getenv("HROBOT_PASSWORD")
 
-	// Fall back to environment variables if no context is active
+	// Fall back to context if environment variables not set
 	if username == "" || password == "" {
-		username = os.Getenv("HROBOT_USERNAME")
-		password = os.Getenv("HROBOT_PASSWORD")
+		username, password = getCredentialsFromContext()
 	}
 
 	if username == "" || password == "" {
