@@ -53,11 +53,13 @@ Read-Only:
 - `action` (String) Action (accept or discard)
 - `destination_ips` (List of String) List of destination IP addresses or CIDRs
 - `destination_port` (String) Destination port or port range
+- `destination_ports` (List of String) List of destination ports or port ranges
 - `ip_version` (String) IP version (ipv4 or ipv6)
 - `name` (String) Rule name
 - `protocol` (String) Protocol (tcp, udp, icmp, esp, gre)
 - `source_ips` (List of String) List of source IP addresses or CIDRs
 - `source_port` (String) Source port or port range
+- `source_ports` (List of String) List of source ports or port ranges
 - `tcp_flags` (String) TCP flags
 
 
@@ -69,9 +71,11 @@ Read-Only:
 - `action` (String) Action (accept or discard)
 - `destination_ips` (List of String) List of destination IP addresses or CIDRs
 - `destination_port` (String) Destination port or port range
+- `destination_ports` (List of String) List of destination ports or port ranges
 - `ip_version` (String) IP version (ipv4 or ipv6)
 - `name` (String) Rule name
 - `protocol` (String) Protocol (tcp, udp, icmp, esp, gre)
 - `source_ips` (List of String) List of source IP addresses or CIDRs
 - `source_port` (String) Source port or port range
+- `source_ports` (List of String) List of source ports or port ranges
 - `tcp_flags` (String) TCP flags

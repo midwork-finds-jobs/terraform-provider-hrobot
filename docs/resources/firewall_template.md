@@ -88,12 +88,14 @@ Required:
 Optional:
 
 - `destination_ips` (List of String) List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
-- `destination_port` (String) Destination port or port range
+- `destination_port` (String, Deprecated) Destination port or port range (deprecated: use destination_ports instead)
+- `destination_ports` (List of String) List of destination ports or port ranges (e.g., ["22", "32768-65535"])
 - `ip_version` (String) IP version (ipv4 or ipv6)
 - `name` (String) Rule name
 - `protocol` (String) Protocol (tcp, udp, icmp, esp, gre)
 - `source_ips` (List of String) List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
-- `source_port` (String) Source port or port range
+- `source_port` (String, Deprecated) Source port or port range (deprecated: use source_ports instead)
+- `source_ports` (List of String) List of source ports or port ranges (e.g., ["22", "32768-65535"])
 - `tcp_flags` (String) TCP flags
 
 
@@ -107,10 +109,12 @@ Required:
 Optional:
 
 - `destination_ips` (List of String) List of destination IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
-- `destination_port` (String) Destination port or port range
+- `destination_port` (String, Deprecated) Destination port or port range (deprecated: use destination_ports instead)
+- `destination_ports` (List of String) List of destination ports or port ranges (e.g., ["22", "32768-65535"])
 - `ip_version` (String) IP version (ipv4 or ipv6)
 - `name` (String) Rule name
 - `protocol` (String) Protocol (tcp, udp, icmp, esp, gre)
 - `source_ips` (List of String) List of source IP addresses or CIDRs. If CIDR notation is not specified, /32 will be automatically added for IPv4 addresses.
-- `source_port` (String) Source port or port range
+- `source_port` (String, Deprecated) Source port or port range (deprecated: use source_ports instead)
+- `source_ports` (List of String) List of source ports or port ranges (e.g., ["22", "32768-65535"])
 - `tcp_flags` (String) TCP flags
