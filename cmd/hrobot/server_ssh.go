@@ -109,19 +109,73 @@ func checkIPInFirewallRules(rules []hrobot.FirewallRule, ipWithCIDR string) bool
 	ip := strings.TrimSuffix(ipWithCIDR, "/32")
 
 	for _, rule := range rules {
-		// Check if rule allows SSH (port 22 or no port specified)
-		allowsSSH := rule.Protocol == "" || rule.Protocol == hrobot.ProtocolTCP ||
-			(rule.Protocol == hrobot.ProtocolTCP && (rule.DestPort == "22" || rule.DestPort == "" || strings.Contains(rule.DestPort, "22")))
+		// Skip rules that don't accept traffic
+		if rule.Action != hrobot.ActionAccept {
+			continue
+		}
+
+		// Skip rules with TCP flags (e.g., "ack" only allows established connections, not new SSH)
+		if rule.TCPFlags != "" {
+			continue
+		}
+
+		// Check if rule allows SSH port 22
+		// A rule allows SSH if:
+		// - Protocol is empty (any) or TCP, AND
+		// - Port is empty (any), "22", or contains "22" in a range/list
+		allowsSSH := false
+		if rule.Protocol == "" || rule.Protocol == hrobot.ProtocolTCP {
+			if rule.DestPort == "" || rule.DestPort == "22" || portContains(rule.DestPort, 22) {
+				allowsSSH = true
+			}
+		}
+
+		if !allowsSSH {
+			continue
+		}
 
 		// Check if rule applies to our IP
-		if rule.Action == hrobot.ActionAccept && allowsSSH {
-			// Check if source IP matches
-			if rule.SourceIP == "" || rule.SourceIP == ip || rule.SourceIP == ipWithCIDR {
-				return true
+		// Empty SourceIP means "any IP" - this rule allows SSH for everyone
+		if rule.SourceIP == "" {
+			return true
+		}
+		// Exact IP match
+		if rule.SourceIP == ip || rule.SourceIP == ipWithCIDR {
+			return true
+		}
+		// Check if it's in a CIDR range
+		if strings.Contains(rule.SourceIP, "/") && ipInCIDR(ip, rule.SourceIP) {
+			return true
+		}
+	}
+	return false
+}
+
+// portContains checks if a port specification (can be single port, range like "1-100", or list like "22,80,443")
+// contains the target port.
+func portContains(portSpec string, targetPort int) bool {
+	// Handle comma-separated list
+	parts := strings.Split(portSpec, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		// Check for range (e.g., "32768-65535")
+		if strings.Contains(part, "-") {
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) == 2 {
+				var start, end int
+				if _, err := fmt.Sscanf(rangeParts[0], "%d", &start); err == nil {
+					if _, err := fmt.Sscanf(rangeParts[1], "%d", &end); err == nil {
+						if targetPort >= start && targetPort <= end {
+							return true
+						}
+					}
+				}
 			}
-			// Check if it's in a CIDR range
-			if strings.Contains(rule.SourceIP, "/") {
-				if ipInCIDR(ip, rule.SourceIP) {
+		} else {
+			// Single port
+			var port int
+			if _, err := fmt.Sscanf(part, "%d", &port); err == nil {
+				if port == targetPort {
 					return true
 				}
 			}

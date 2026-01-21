@@ -266,54 +266,111 @@ func unwrapResponse(data []byte) (json.RawMessage, error) {
 	return data, nil
 }
 
-// doRequest executes an HTTP request with authentication.
+// doRequest executes an HTTP request with authentication and automatic retry for transient errors.
 func (c *Client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
-	url := c.baseURL + path
+	reqURL := c.baseURL + path
 
-	// Read body for logging if debug is enabled
+	// Always read body bytes to support retries (body reader can only be read once)
 	var bodyBytes []byte
-	if c.debug && body != nil {
+	if body != nil {
 		var err error
 		bodyBytes, err = io.ReadAll(body)
 		if err != nil {
-			return nil, NewNetworkError("failed to read request body for logging", err)
+			return nil, NewNetworkError("failed to read request body", err)
 		}
-		body = bytes.NewReader(bodyBytes)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
-		return nil, NewNetworkError("failed to create request", err)
-	}
+	const maxRetries = 3
+	var lastErr error
+	var lastResp *http.Response
 
-	req.SetBasicAuth(c.username, c.password)
-	req.Header.Set("User-Agent", c.userAgent)
-
-	if body != nil {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	}
-
-	if c.debug {
-		fmt.Printf("\n=== HTTP Request ===\n")
-		fmt.Printf("%s %s\n", method, url)
-		fmt.Printf("Headers:\n")
-		for k, v := range req.Header {
-			if k != "Authorization" {
-				fmt.Printf("  %s: %s\n", k, v)
-			}
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Check context before each attempt
+		select {
+		case <-ctx.Done():
+			return nil, NewNetworkError("request cancelled", ctx.Err())
+		default:
 		}
+
+		// Create fresh body reader for each attempt
+		var bodyReader io.Reader
 		if len(bodyBytes) > 0 {
-			fmt.Printf("Body:\n%s\n", string(bodyBytes))
+			bodyReader = bytes.NewReader(bodyBytes)
 		}
-		fmt.Printf("===================\n\n")
+
+		req, err := http.NewRequestWithContext(ctx, method, reqURL, bodyReader)
+		if err != nil {
+			return nil, NewNetworkError("failed to create request", err)
+		}
+
+		req.SetBasicAuth(c.username, c.password)
+		req.Header.Set("User-Agent", c.userAgent)
+
+		if len(bodyBytes) > 0 {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+
+		if c.debug {
+			fmt.Printf("\n=== HTTP Request (attempt %d/%d) ===\n", attempt+1, maxRetries)
+			fmt.Printf("%s %s\n", method, reqURL)
+			fmt.Printf("Headers:\n")
+			for k, v := range req.Header {
+				if k != "Authorization" {
+					fmt.Printf("  %s: %s\n", k, v)
+				}
+			}
+			if len(bodyBytes) > 0 {
+				fmt.Printf("Body:\n%s\n", string(bodyBytes))
+			}
+			fmt.Printf("===================\n\n")
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = NewNetworkError("request failed", err)
+			if attempt < maxRetries-1 {
+				time.Sleep(time.Duration(attempt+1) * 500 * time.Millisecond)
+				continue
+			}
+			return nil, lastErr
+		}
+
+		// Retry on transient errors (401 can be flaky with Hetzner API, 5xx are server errors)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode >= 500 {
+			// Close the response body before retry
+			_ = resp.Body.Close()
+			lastResp = resp
+
+			if c.debug {
+				fmt.Printf("got status %d, retrying (%d/%d)...\n", resp.StatusCode, attempt+1, maxRetries)
+			}
+
+			if attempt < maxRetries-1 {
+				time.Sleep(time.Duration(attempt+1) * 500 * time.Millisecond)
+				continue
+			}
+			// On last attempt, re-do the request to return the response
+			bodyReader = nil
+			if len(bodyBytes) > 0 {
+				bodyReader = bytes.NewReader(bodyBytes)
+			}
+			req, _ = http.NewRequestWithContext(ctx, method, reqURL, bodyReader)
+			req.SetBasicAuth(c.username, c.password)
+			req.Header.Set("User-Agent", c.userAgent)
+			if len(bodyBytes) > 0 {
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			}
+			return c.httpClient.Do(req)
+		}
+
+		return resp, nil
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, NewNetworkError("request failed", err)
+	// Should not reach here, but just in case
+	if lastResp != nil {
+		return lastResp, nil
 	}
-
-	return resp, nil
+	return nil, lastErr
 }
 
 // handleResponse processes the HTTP response and handles errors.

@@ -195,6 +195,7 @@ func TestClientOptions(t *testing.T) {
 		client := New("user", "pass")
 		if client == nil {
 			t.Fatal("New() returned nil")
+			return
 		}
 		if client.username != "user" {
 			t.Errorf("username = %s, want user", client.username)

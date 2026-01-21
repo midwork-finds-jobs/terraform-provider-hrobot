@@ -13,6 +13,7 @@ func TestErrorCreation(t *testing.T) {
 		err := NewAPIError(ErrServerNotFound, "server 123 not found")
 		if err == nil {
 			t.Fatal("expected error, got nil")
+			return
 		}
 
 		if err.Kind != ErrKindAPI {
@@ -29,6 +30,7 @@ func TestErrorCreation(t *testing.T) {
 		err := NewNetworkError("failed to connect", cause)
 		if err == nil {
 			t.Fatal("expected error, got nil")
+			return
 		}
 
 		if err.Kind != ErrKindNetwork {
@@ -47,6 +49,7 @@ func TestErrorCreation(t *testing.T) {
 		err := NewParseError("failed to parse response", cause)
 		if err == nil {
 			t.Fatal("expected error, got nil")
+			return
 		}
 
 		if err.Kind != ErrKindParse {
@@ -64,6 +67,7 @@ func TestErrorCreation(t *testing.T) {
 		err := NewAuthError("invalid credentials")
 		if err == nil {
 			t.Fatal("expected error, got nil")
+			return
 		}
 
 		if err.Kind != ErrKindAuth {
