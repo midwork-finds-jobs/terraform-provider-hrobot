@@ -46,15 +46,17 @@ type FirewallResourceModel struct {
 
 // FirewallRuleModel describes a firewall rule.
 type FirewallRuleModel struct {
-	Name            types.String `tfsdk:"name"`
-	IPVersion       types.String `tfsdk:"ip_version"`
-	Action          types.String `tfsdk:"action"`
-	Protocol        types.String `tfsdk:"protocol"`
-	SourceIPs       types.List   `tfsdk:"source_ips"`
-	DestinationIPs  types.List   `tfsdk:"destination_ips"`
-	SourcePort      types.String `tfsdk:"source_port"`
-	DestinationPort types.String `tfsdk:"destination_port"`
-	TCPFlags        types.String `tfsdk:"tcp_flags"`
+	Name             types.String `tfsdk:"name"`
+	IPVersion        types.String `tfsdk:"ip_version"`
+	Action           types.String `tfsdk:"action"`
+	Protocol         types.String `tfsdk:"protocol"`
+	SourceIPs        types.List   `tfsdk:"source_ips"`
+	DestinationIPs   types.List   `tfsdk:"destination_ips"`
+	SourcePort       types.String `tfsdk:"source_port"`
+	DestinationPort  types.String `tfsdk:"destination_port"`
+	SourcePorts      types.List   `tfsdk:"source_ports"`
+	DestinationPorts types.List   `tfsdk:"destination_ports"`
+	TCPFlags         types.String `tfsdk:"tcp_flags"`
 }
 
 func (r *FirewallResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -125,11 +127,23 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
-							MarkdownDescription: "Source port or port range",
+							MarkdownDescription: "Source port or port range (deprecated: use source_ports instead)",
 							Optional:            true,
+							DeprecationMessage:  "Use source_ports list instead for better Terraform compatibility",
 						},
 						"destination_port": schema.StringAttribute{
-							MarkdownDescription: "Destination port or port range",
+							MarkdownDescription: "Destination port or port range (deprecated: use destination_ports instead)",
+							Optional:            true,
+							DeprecationMessage:  "Use destination_ports list instead for better Terraform compatibility",
+						},
+						"source_ports": schema.ListAttribute{
+							MarkdownDescription: "List of source ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"destination_ports": schema.ListAttribute{
+							MarkdownDescription: "List of destination ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"tcp_flags": schema.StringAttribute{
@@ -171,11 +185,23 @@ func (r *FirewallResource) Schema(ctx context.Context, req resource.SchemaReques
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
-							MarkdownDescription: "Source port or port range",
+							MarkdownDescription: "Source port or port range (deprecated: use source_ports instead)",
 							Optional:            true,
+							DeprecationMessage:  "Use source_ports list instead for better Terraform compatibility",
 						},
 						"destination_port": schema.StringAttribute{
-							MarkdownDescription: "Destination port or port range",
+							MarkdownDescription: "Destination port or port range (deprecated: use destination_ports instead)",
+							Optional:            true,
+							DeprecationMessage:  "Use destination_ports list instead for better Terraform compatibility",
+						},
+						"source_ports": schema.ListAttribute{
+							MarkdownDescription: "List of source ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"destination_ports": schema.ListAttribute{
+							MarkdownDescription: "List of destination ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"tcp_flags": schema.StringAttribute{
@@ -492,10 +518,60 @@ func convertToHRobotRuleWithIPs(rule FirewallRuleModel, sourceIP, destIP string)
 		Protocol:   hrobot.Protocol(rule.Protocol.ValueString()),
 		SourceIP:   normalizeCIDR(sourceIP),
 		DestIP:     normalizeCIDR(destIP),
-		SourcePort: rule.SourcePort.ValueString(),
-		DestPort:   rule.DestinationPort.ValueString(),
+		SourcePort: getPortString(rule.SourcePorts, rule.SourcePort),
+		DestPort:   getPortString(rule.DestinationPorts, rule.DestinationPort),
 		TCPFlags:   rule.TCPFlags.ValueString(),
 	}
+}
+
+// Helper function to get port string from either list or single value.
+// List takes precedence over single value for backwards compatibility.
+func getPortString(portList types.List, portSingle types.String) string {
+	// If list is set and not empty, join with comma
+	if !portList.IsNull() && !portList.IsUnknown() {
+		var ports []string
+		_ = portList.ElementsAs(context.Background(), &ports, false)
+		if len(ports) > 0 {
+			return joinPorts(ports)
+		}
+	}
+	// Fall back to single value
+	return portSingle.ValueString()
+}
+
+// Helper function to join port list into comma-separated string.
+func joinPorts(ports []string) string {
+	if len(ports) == 0 {
+		return ""
+	}
+	result := ports[0]
+	for i := 1; i < len(ports); i++ {
+		result += "," + ports[i]
+	}
+	return result
+}
+
+// Helper function to split port string into list.
+func splitPorts(portStr string) []string {
+	if portStr == "" {
+		return nil
+	}
+	var result []string
+	current := ""
+	for _, c := range portStr {
+		if c == ',' {
+			if current != "" {
+				result = append(result, current)
+			}
+			current = ""
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		result = append(result, current)
+	}
+	return result
 }
 
 // Helper function to normalize IP addresses by adding /32 or /128 if CIDR is missing.
@@ -542,16 +618,33 @@ func convertFromHRobotRule(rule hrobot.FirewallRule) FirewallRuleModel {
 		destinationIPList = types.ListNull(types.StringType)
 	}
 
+	// Convert ports to lists
+	var sourcePortsList types.List
+	if ports := splitPorts(rule.SourcePort); len(ports) > 0 {
+		sourcePortsList, _ = types.ListValueFrom(context.Background(), types.StringType, ports)
+	} else {
+		sourcePortsList = types.ListNull(types.StringType)
+	}
+
+	var destinationPortsList types.List
+	if ports := splitPorts(rule.DestPort); len(ports) > 0 {
+		destinationPortsList, _ = types.ListValueFrom(context.Background(), types.StringType, ports)
+	} else {
+		destinationPortsList = types.ListNull(types.StringType)
+	}
+
 	return FirewallRuleModel{
-		Name:            stringOrNull(rule.Name),
-		IPVersion:       stringOrNull(string(rule.IPVersion)),
-		Action:          stringOrNull(string(rule.Action)),
-		Protocol:        stringOrNull(string(rule.Protocol)),
-		SourceIPs:       sourceIPList,
-		DestinationIPs:  destinationIPList,
-		SourcePort:      stringOrNull(rule.SourcePort),
-		DestinationPort: stringOrNull(rule.DestPort),
-		TCPFlags:        stringOrNull(rule.TCPFlags),
+		Name:             stringOrNull(rule.Name),
+		IPVersion:        stringOrNull(string(rule.IPVersion)),
+		Action:           stringOrNull(string(rule.Action)),
+		Protocol:         stringOrNull(string(rule.Protocol)),
+		SourceIPs:        sourceIPList,
+		DestinationIPs:   destinationIPList,
+		SourcePort:       stringOrNull(rule.SourcePort),
+		DestinationPort:  stringOrNull(rule.DestPort),
+		SourcePorts:      sourcePortsList,
+		DestinationPorts: destinationPortsList,
+		TCPFlags:         stringOrNull(rule.TCPFlags),
 	}
 }
 

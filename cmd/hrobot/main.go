@@ -59,6 +59,34 @@ func run() error {
 		return handleContextCommand()
 	}
 
+	// Check if help is requested anywhere in args (allows `server connect --help` without auth)
+	if isHelpRequested() {
+		// Route to command handlers which will show help
+		switch command {
+		case "server":
+			return handleServerCommand(context.Background(), nil)
+		case "firewall":
+			return handleFirewallCommand(context.Background(), nil)
+		case "template":
+			return handleTemplateCommand(context.Background(), nil)
+		case "ssh-key":
+			return handleSSHKeyCommand(context.Background(), nil)
+		case "rdns":
+			return handleRDNSCommand(context.Background(), nil)
+		case "failover":
+			return handleFailoverCommand(context.Background(), nil)
+		case "vswitch":
+			return handleVSwitchCommand(context.Background(), nil)
+		case "auction":
+			return handleAuctionCommand(context.Background(), nil)
+		case "product":
+			return handleProductCommand(context.Background(), nil)
+		default:
+			printHelp()
+			return nil
+		}
+	}
+
 	// Get credentials from environment first, then fall back to context
 	username := os.Getenv("HROBOT_USERNAME")
 	password := os.Getenv("HROBOT_PASSWORD")

@@ -110,6 +110,16 @@ func (d *FirewallDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 							MarkdownDescription: "Destination port or port range",
 							Computed:            true,
 						},
+						"source_ports": schema.ListAttribute{
+							MarkdownDescription: "List of source ports or port ranges",
+							ElementType:         types.StringType,
+							Computed:            true,
+						},
+						"destination_ports": schema.ListAttribute{
+							MarkdownDescription: "List of destination ports or port ranges",
+							ElementType:         types.StringType,
+							Computed:            true,
+						},
 						"tcp_flags": schema.StringAttribute{
 							MarkdownDescription: "TCP flags",
 							Computed:            true,
@@ -154,6 +164,16 @@ func (d *FirewallDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 						},
 						"destination_port": schema.StringAttribute{
 							MarkdownDescription: "Destination port or port range",
+							Computed:            true,
+						},
+						"source_ports": schema.ListAttribute{
+							MarkdownDescription: "List of source ports or port ranges",
+							ElementType:         types.StringType,
+							Computed:            true,
+						},
+						"destination_ports": schema.ListAttribute{
+							MarkdownDescription: "List of destination ports or port ranges",
+							ElementType:         types.StringType,
 							Computed:            true,
 						},
 						"tcp_flags": schema.StringAttribute{

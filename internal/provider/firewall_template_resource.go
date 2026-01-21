@@ -119,11 +119,23 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
-							MarkdownDescription: "Source port or port range",
+							MarkdownDescription: "Source port or port range (deprecated: use source_ports instead)",
 							Optional:            true,
+							DeprecationMessage:  "Use source_ports list instead for better Terraform compatibility",
 						},
 						"destination_port": schema.StringAttribute{
-							MarkdownDescription: "Destination port or port range",
+							MarkdownDescription: "Destination port or port range (deprecated: use destination_ports instead)",
+							Optional:            true,
+							DeprecationMessage:  "Use destination_ports list instead for better Terraform compatibility",
+						},
+						"source_ports": schema.ListAttribute{
+							MarkdownDescription: "List of source ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"destination_ports": schema.ListAttribute{
+							MarkdownDescription: "List of destination ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"tcp_flags": schema.StringAttribute{
@@ -169,11 +181,23 @@ func (r *FirewallTemplateResource) Schema(_ context.Context, _ resource.SchemaRe
 							Optional:            true,
 						},
 						"source_port": schema.StringAttribute{
-							MarkdownDescription: "Source port or port range",
+							MarkdownDescription: "Source port or port range (deprecated: use source_ports instead)",
 							Optional:            true,
+							DeprecationMessage:  "Use source_ports list instead for better Terraform compatibility",
 						},
 						"destination_port": schema.StringAttribute{
-							MarkdownDescription: "Destination port or port range",
+							MarkdownDescription: "Destination port or port range (deprecated: use destination_ports instead)",
+							Optional:            true,
+							DeprecationMessage:  "Use destination_ports list instead for better Terraform compatibility",
+						},
+						"source_ports": schema.ListAttribute{
+							MarkdownDescription: "List of source ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
+							Optional:            true,
+						},
+						"destination_ports": schema.ListAttribute{
+							MarkdownDescription: "List of destination ports or port ranges (e.g., [\"22\", \"32768-65535\"])",
+							ElementType:         types.StringType,
 							Optional:            true,
 						},
 						"tcp_flags": schema.StringAttribute{
