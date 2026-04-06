@@ -82,17 +82,17 @@ type RescueConfig struct {
 
 // LinuxConfig represents Linux installation configuration.
 type LinuxConfig struct {
-	ServerIP       string      `json:"server_ip"`
-	ServerIPv6Net  string      `json:"server_ipv6_net"`
-	ServerNumber   int         `json:"server_number"`
-	Dist           interface{} `json:"dist"` // string when active, []string when not
-	Arch           interface{} `json:"arch"` // int when active, []int when not
-	Lang           interface{} `json:"lang"` // string when active, []string when not
-	Active         bool        `json:"active"`
-	Hostname       string      `json:"hostname,omitempty"`
-	Password       *string     `json:"password,omitempty"`
-	AuthorizedKeys []string    `json:"authorized_key,omitempty"`
-	HostKey        []string    `json:"host_key,omitempty"`
+	ServerIP       string            `json:"server_ip"`
+	ServerIPv6Net  string            `json:"server_ipv6_net"`
+	ServerNumber   int               `json:"server_number"`
+	Dist           interface{}       `json:"dist"` // string when active, []string when not
+	Arch           interface{}       `json:"arch"` // int when active, []int when not
+	Lang           interface{}       `json:"lang"` // string when active, []string when not
+	Active         bool              `json:"active"`
+	Hostname       string            `json:"hostname,omitempty"`
+	Password       *string           `json:"password,omitempty"`
+	AuthorizedKeys AuthorizedKeyList `json:"authorized_key,omitempty"`
+	HostKey        []string          `json:"host_key,omitempty"`
 }
 
 // VNCConfig represents VNC configuration.
