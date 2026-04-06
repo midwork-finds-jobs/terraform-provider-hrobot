@@ -413,3 +413,70 @@ func TestBerlinTimeLocation(t *testing.T) {
 		t.Errorf("Berlin offset = %d, want %d (UTC+2)", offset, expectedOffset)
 	}
 }
+
+func TestAuthorizedKeyListUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+		wantErr  bool
+	}{
+		{
+			name:     "null",
+			input:    "null",
+			expected: nil,
+		},
+		{
+			name:     "empty array",
+			input:    "[]",
+			expected: []string{},
+		},
+		{
+			name:     "string array",
+			input:    `["aa:bb:cc","dd:ee:ff"]`,
+			expected: []string{"aa:bb:cc", "dd:ee:ff"},
+		},
+		{
+			name:     "object array with key wrapper",
+			input:    `[{"key":{"name":"mykey","fingerprint":"aa:bb:cc"}},{"key":{"name":"other","fingerprint":"dd:ee:ff"}}]`,
+			expected: []string{"aa:bb:cc", "dd:ee:ff"},
+		},
+		{
+			name:     "single object",
+			input:    `[{"key":{"name":"onni","fingerprint":"ab:cd:ef"}}]`,
+			expected: []string{"ab:cd:ef"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got AuthorizedKeyList
+			err := json.Unmarshal([]byte(tt.input), &got)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if len(got) != len(tt.expected) {
+				t.Errorf("UnmarshalJSON() len = %d, want %d", len(got), len(tt.expected))
+				return
+			}
+			for i := range got {
+				if got[i] != tt.expected[i] {
+					t.Errorf("UnmarshalJSON()[%d] = %q, want %q", i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+
+	// Test full RescueConfig unmarshal with object array format
+	t.Run("rescue config with object array", func(t *testing.T) {
+		input := `{"server_ip":"1.2.3.4","server_ipv6_net":"::","server_number":123,"active":true,"authorized_key":[{"key":{"name":"onni","fingerprint":"aa:bb:cc"}}],"password":"secret"}`
+		var config RescueConfig
+		if err := json.Unmarshal([]byte(input), &config); err != nil {
+			t.Fatalf("UnmarshalJSON() error = %v", err)
+		}
+		if len(config.AuthorizedKeys) != 1 || config.AuthorizedKeys[0] != "aa:bb:cc" {
+			t.Errorf("expected [aa:bb:cc], got %v", config.AuthorizedKeys)
+		}
+	})
+}

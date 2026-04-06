@@ -30,6 +30,15 @@ type AuctionServersDataSource struct {
 type AuctionServersDataSourceModel struct {
 	Servers []AuctionServerModel `tfsdk:"servers"`
 	ID      types.String         `tfsdk:"id"`
+	Filters *AuctionFiltersModel `tfsdk:"filters"`
+}
+
+// AuctionFiltersModel describes the optional filter criteria for auction servers.
+type AuctionFiltersModel struct {
+	Datacenter []types.String `tfsdk:"datacenter"`
+	MinRAM     types.Int64    `tfsdk:"min_ram"`
+	MinHDD     types.Float64  `tfsdk:"min_hdd"`
+	MaxPrice   types.Float64  `tfsdk:"max_price"`
 }
 
 // AuctionServerModel describes a single auction server.
@@ -64,11 +73,34 @@ func (d *AuctionServersDataSource) Metadata(_ context.Context, req datasource.Me
 // Schema defines the schema for the data source.
 func (d *AuctionServersDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Fetches all servers currently available on the Hetzner auction/server market.",
+		MarkdownDescription: "Fetches servers currently available on the Hetzner auction/server market.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				MarkdownDescription: "Placeholder identifier (always set to 'auction_servers')",
 				Computed:            true,
+			},
+			"filters": schema.SingleNestedAttribute{
+				MarkdownDescription: "Optional filters to narrow down results.",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"datacenter": schema.ListAttribute{
+						MarkdownDescription: "List of datacenter names to include (e.g., [\"FSN1-DC14\", \"NBG1-DC3\"]).",
+						Optional:            true,
+						ElementType:         types.StringType,
+					},
+					"min_ram": schema.Int64Attribute{
+						MarkdownDescription: "Minimum RAM in MB (e.g., 32768 for 32GB).",
+						Optional:            true,
+					},
+					"min_hdd": schema.Float64Attribute{
+						MarkdownDescription: "Minimum disk size in GB (e.g., 2000 for 2TB).",
+						Optional:            true,
+					},
+					"max_price": schema.Float64Attribute{
+						MarkdownDescription: "Maximum monthly price in euros (net, e.g., 50.00).",
+						Optional:            true,
+					},
+				},
 			},
 			"servers": schema.ListNestedAttribute{
 				MarkdownDescription: "List of auction servers",
@@ -186,6 +218,11 @@ func (d *AuctionServersDataSource) Configure(_ context.Context, req datasource.C
 func (d *AuctionServersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var state AuctionServersDataSourceModel
 
+	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Get auction servers from API
 	servers, err := d.client.Auction.List(ctx)
 	if err != nil {
@@ -194,6 +231,51 @@ func (d *AuctionServersDataSource) Read(ctx context.Context, req datasource.Read
 			fmt.Sprintf("Could not read auction servers: %s", err.Error()),
 		)
 		return
+	}
+
+	// Apply filters if provided
+	if state.Filters != nil {
+		f := state.Filters
+		var filtered []hrobot.AuctionServer
+		for _, s := range servers {
+			// Datacenter filter
+			if len(f.Datacenter) > 0 {
+				if s.Datacenter == nil {
+					continue
+				}
+				matched := false
+				for _, dc := range f.Datacenter {
+					if *s.Datacenter == dc.ValueString() {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
+				}
+			}
+			// min_ram filter (MB): MemorySize is in GB
+			if !f.MinRAM.IsNull() && !f.MinRAM.IsUnknown() {
+				minRAMGB := float64(f.MinRAM.ValueInt64()) / 1024.0
+				if s.MemorySize < minRAMGB {
+					continue
+				}
+			}
+			// min_hdd filter (GB)
+			if !f.MinHDD.IsNull() && !f.MinHDD.IsUnknown() {
+				if s.HDDSize < f.MinHDD.ValueFloat64() {
+					continue
+				}
+			}
+			// max_price filter (euros net)
+			if !f.MaxPrice.IsNull() && !f.MaxPrice.IsUnknown() {
+				if s.Price.Float64() > f.MaxPrice.ValueFloat64() {
+					continue
+				}
+			}
+			filtered = append(filtered, s)
+		}
+		servers = filtered
 	}
 
 	// Map API response to Terraform state

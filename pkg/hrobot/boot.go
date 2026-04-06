@@ -5,9 +5,47 @@ package hrobot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 )
+
+// AuthorizedKeyList handles the authorized_key field which the API returns
+// as either []string (fingerprints) or [{"key": {"name": "...", "fingerprint": "..."}}].
+type AuthorizedKeyList []string
+
+// UnmarshalJSON implements custom unmarshaling for AuthorizedKeyList.
+func (a *AuthorizedKeyList) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// Try as []string first
+	var strs []string
+	if err := json.Unmarshal(data, &strs); err == nil {
+		*a = strs
+		return nil
+	}
+
+	// Try as array of key objects: [{"key": {"name": "...", "fingerprint": "..."}}]
+	var keyObjs []struct {
+		Key struct {
+			Fingerprint string `json:"fingerprint"`
+		} `json:"key"`
+	}
+	if err := json.Unmarshal(data, &keyObjs); err == nil {
+		result := make([]string, 0, len(keyObjs))
+		for _, ko := range keyObjs {
+			if ko.Key.Fingerprint != "" {
+				result = append(result, ko.Key.Fingerprint)
+			}
+		}
+		*a = result
+		return nil
+	}
+
+	return fmt.Errorf("cannot unmarshal authorized_key: unexpected format")
+}
 
 // BootService handles boot configuration API operations.
 type BootService struct {
@@ -31,15 +69,15 @@ type BootConfig struct {
 
 // RescueConfig represents rescue system configuration.
 type RescueConfig struct {
-	ServerIP       string      `json:"server_ip"`
-	ServerIPv6Net  string      `json:"server_ipv6_net"`
-	ServerNumber   int         `json:"server_number"`
-	Active         bool        `json:"active"`
-	OS             interface{} `json:"os,omitempty"`   // string when active, []string when not
-	Arch           interface{} `json:"arch,omitempty"` // int when active, []int when not
-	AuthorizedKeys []string    `json:"authorized_key,omitempty"`
-	HostKey        []string    `json:"host_key,omitempty"`
-	Password       *string     `json:"password,omitempty"`
+	ServerIP       string            `json:"server_ip"`
+	ServerIPv6Net  string            `json:"server_ipv6_net"`
+	ServerNumber   int               `json:"server_number"`
+	Active         bool              `json:"active"`
+	OS             interface{}       `json:"os,omitempty"`   // string when active, []string when not
+	Arch           interface{}       `json:"arch,omitempty"` // int when active, []int when not
+	AuthorizedKeys AuthorizedKeyList `json:"authorized_key,omitempty"`
+	HostKey        []string          `json:"host_key,omitempty"`
+	Password       *string           `json:"password,omitempty"`
 }
 
 // LinuxConfig represents Linux installation configuration.

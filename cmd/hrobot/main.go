@@ -655,7 +655,7 @@ func parseFlagBool(args []string, flag string) bool {
 
 // Phase 1 command handlers.
 func handleAllowSSH(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall allow-ssh <server-id> --source-ips <ips> | --my-ip [--name <name>] [--force]\n\n", os.Args[0])
 		fmt.Println("allow SSH access from specific IPs")
 		fmt.Println("\nArguments:")
@@ -684,7 +684,7 @@ func handleAllowSSH(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleAllowHTTPS(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall allow-https <server-id> --source-ips <ips>\n\n", os.Args[0])
 		fmt.Println("allow HTTPS access from specific IPs (supports IPv6)")
 		fmt.Println("\nArguments:")
@@ -708,7 +708,7 @@ func handleAllowHTTPS(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall allow-mosh <server-id> --source-ips <ips> | --my-ip [--name <name>] [--force]\n\n", os.Args[0])
 		fmt.Println("allow MOSH access from specific IPs")
 		fmt.Println("\nArguments:")
@@ -737,7 +737,7 @@ func handleAllowMOSH(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleAllowAll(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall allow-all <server-id> --source-ips <ips> | --my-ip [--name <name>] [--force]\n\n", os.Args[0])
 		fmt.Println("allow access to all ports from specific IPs")
 		fmt.Println("\nArguments:")
@@ -768,7 +768,7 @@ func handleAllowAll(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall block-http <server-id>\n\n", os.Args[0])
 		fmt.Println("block insecure HTTP (port 80)")
 		fmt.Println("\nArguments:")
@@ -785,7 +785,7 @@ func handleBlockHTTP(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleHarden(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall harden <server-id> --block-http\n\n", os.Args[0])
 		fmt.Println("apply common security hardening")
 		fmt.Println("\nArguments:")
@@ -807,7 +807,7 @@ func handleHarden(ctx context.Context, client *hrobot.Client) error {
 
 // Phase 2 command handlers.
 func handleAddRule(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall add-rule <server-id> --direction <in|out> --protocol <proto> [options]\n\n", os.Args[0])
 		fmt.Println("add a firewall rule")
 		fmt.Println("\nArguments:")
@@ -851,7 +851,7 @@ func handleAddRule(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleDeleteRule(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall delete-rule <server-id> --name <name> | --index <n> [--direction <in|out>]\n\n", os.Args[0])
 		fmt.Println("delete a firewall rule")
 		fmt.Println("\nArguments:")
@@ -876,7 +876,7 @@ func handleDeleteRule(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleListRules(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall list-rules <server-id> [--direction <in|out>] [--output json]\n\n", os.Args[0])
 		fmt.Println("list firewall rules")
 		fmt.Println("\nArguments:")
@@ -975,7 +975,7 @@ func handleTemplateCommand(ctx context.Context, client *hrobot.Client) error {
 
 // Phase 4 status management command handlers.
 func handleEnableFirewall(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall enable <server-id> [--filter-ipv6=true|false]\n\n", os.Args[0])
 		fmt.Println("enable firewall")
 		fmt.Println("\nArguments:")
@@ -1005,7 +1005,7 @@ func handleEnableFirewall(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleDisableFirewall(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall disable <server-id>\n\n", os.Args[0])
 		fmt.Println("disable firewall")
 		fmt.Println("\nArguments:")
@@ -1022,7 +1022,7 @@ func handleDisableFirewall(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleFirewallStatus(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall status <server-id>\n\n", os.Args[0])
 		fmt.Println("show firewall status")
 		fmt.Println("\nArguments:")
@@ -1039,7 +1039,7 @@ func handleFirewallStatus(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleWaitFirewall(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall wait <server-id>\n\n", os.Args[0])
 		fmt.Println("wait for firewall to be ready")
 		fmt.Println("\nArguments:")
@@ -1056,7 +1056,7 @@ func handleWaitFirewall(ctx context.Context, client *hrobot.Client) error {
 }
 
 func handleResetFirewall(ctx context.Context, client *hrobot.Client) error {
-	if len(os.Args) < 4 {
+	if isHelpRequested() || len(os.Args) < 4 {
 		fmt.Printf("Usage: %s firewall reset <server-id> --confirm\n\n", os.Args[0])
 		fmt.Println("reset firewall (delete all rules)")
 		fmt.Println("\nArguments:")
