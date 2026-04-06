@@ -34,14 +34,25 @@ And check for examples in [terraform registry docs](https://registry.terraform.i
 
 The internal golang api client is also exposed in separate `hrobot` CLI.
 
-#### Building the CLI
+#### Installing the CLI
+
+**Homebrew (macOS and Linux):**
 
 ```bash
-# Build the binary
-go build -o hrobot cmd/hrobot/main.go
+brew tap midwork-finds-jobs/tap
+brew install hrobot
+```
 
-# Or install it to your $GOPATH/bin
-go install ./cmd/hrobot
+**Go install:**
+
+```bash
+go install github.com/midwork-finds-jobs/terraform-provider-hrobot/cmd/hrobot@latest
+```
+
+**Build from source:**
+
+```bash
+go build -o hrobot cmd/hrobot/main.go
 ```
 
 #### Usage
