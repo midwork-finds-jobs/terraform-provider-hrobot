@@ -39,8 +39,7 @@ The internal golang api client is also exposed in separate `hrobot` CLI.
 **Homebrew (macOS and Linux):**
 
 ```bash
-brew tap midwork-finds-jobs/tap
-brew install hrobot
+brew install midwork-finds-jobs/tap/hrobot
 ```
 
 **Go install:**
