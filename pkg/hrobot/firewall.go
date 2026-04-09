@@ -79,6 +79,18 @@ type UpdateConfig struct {
 }
 
 // Update updates the firewall configuration for a server.
+//
+// Hetzner's Robot API expects the per-rule form fields to be encoded
+// with LITERAL square brackets in the keys (e.g.
+// `rules[input][0][dst_port]=22`). Go's `url.Values.Encode()`
+// percent-encodes `[` and `]`, which Hetzner then silently ignores —
+// the top-level `status` / `whitelist_hos` fields are accepted but
+// every per-rule field (`dst_port`, `src_ip`, `protocol`, etc.) ends
+// up null on the server, so the firewall falls open. See the
+// `UpdateTemplate` / `CreateTemplate` paths in this same file which
+// already use `PostRaw` for exactly this reason; `Update` was the
+// lone path that still routed through `Post` + `MergeValues` and
+// re-encoded the brackets.
 func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config UpdateConfig) (*FirewallConfig, error) {
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
 
@@ -97,29 +109,33 @@ func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config 
 		encoder.AddOutputRule(ruleData)
 	}
 
-	// Add status and whitelist settings
-	additional := url.Values{}
-	additional.Set("status", string(config.Status))
-	if config.WhitelistHOS {
-		additional.Set("whitelist_hos", "true")
-	} else {
-		additional.Set("whitelist_hos", "false")
-	}
-	if config.FilterIPv6 {
-		additional.Set("filter_ipv6", "true")
-	} else {
-		additional.Set("filter_ipv6", "false")
+	// Non-rule fields go alongside the encoded rules in the same
+	// request body. `EncodeToString` keeps the rule keys' brackets
+	// literal so Hetzner actually parses them.
+	additional := map[string]string{
+		"status":       string(config.Status),
+		"whitelist_hos": boolToString(config.WhitelistHOS),
+		"filter_ipv6":  boolToString(config.FilterIPv6),
 	}
 
-	formData := encoder.MergeValues(additional)
+	formData := encoder.EncodeToString(additional)
 
 	var result FirewallConfig
-	err := f.client.Post(ctx, path, formData, &result)
+	err := f.client.PostRaw(ctx, path, formData, &result)
 	if err != nil {
 		return nil, err
 	}
 
 	return &result, nil
+}
+
+// boolToString returns "true" / "false" — the two strings Hetzner's
+// Robot API accepts for boolean form fields.
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // encodeRule converts a FirewallRule to a map for URL encoding.
