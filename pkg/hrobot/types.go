@@ -338,3 +338,22 @@ func (r *Reset) UnmarshalJSON(data []byte) error {
 
 	return fmt.Errorf("type field must be either string or array")
 }
+
+// NumberOrString is a string that the API may encode as a JSON number or string.
+// Market transactions return product.id as a number, product transactions as a name.
+type NumberOrString string
+
+// UnmarshalJSON accepts both JSON strings and JSON numbers.
+func (ns *NumberOrString) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*ns = NumberOrString(str)
+		return nil
+	}
+	var num json.Number
+	if err := json.Unmarshal(data, &num); err != nil {
+		return err
+	}
+	*ns = NumberOrString(num.String())
+	return nil
+}

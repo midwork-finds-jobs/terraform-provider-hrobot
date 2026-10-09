@@ -480,3 +480,18 @@ func TestAuthorizedKeyListUnmarshalJSON(t *testing.T) {
 		}
 	})
 }
+
+func TestMarketTransactionNumericProductID(t *testing.T) {
+	for _, input := range []string{
+		`{"product":{"id":3087248,"name":"Server Auction"}}`,
+		`{"product":{"id":"3087248","name":"Server Auction"}}`,
+	} {
+		var tx MarketTransaction
+		if err := json.Unmarshal([]byte(input), &tx); err != nil {
+			t.Fatalf("Unmarshal(%s) error = %v", input, err)
+		}
+		if tx.Product.ID != "3087248" {
+			t.Errorf("Product.ID = %q, want %q", tx.Product.ID, "3087248")
+		}
+	}
+}

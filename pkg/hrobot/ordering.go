@@ -173,22 +173,22 @@ type AddonTransaction struct {
 
 // PurchasedMarketProduct represents a server purchased from the market.
 type PurchasedMarketProduct struct {
-	ID           string   `json:"id"` // Can be numeric string or product name string
-	Name         string   `json:"name"`
-	Description  []string `json:"description"`
-	Traffic      string   `json:"traffic"`
-	Dist         string   `json:"dist"`
-	Arch         int      `json:"arch"`
-	Lang         string   `json:"lang"`
-	Location     *string  `json:"location"`
-	Datacenter   *string  `json:"datacenter"`
-	CPU          string   `json:"cpu"`
-	CPUBenchmark uint32   `json:"cpu_benchmark"`
-	MemorySize   float64  `json:"memory_size"`
-	HDDSize      float64  `json:"hdd_size"`
-	HDDText      string   `json:"hdd_text"`
-	HDDCount     uint8    `json:"hdd_count"`
-	NetworkSpeed *string  `json:"network_speed"`
+	ID           NumberOrString `json:"id"`
+	Name         string         `json:"name"`
+	Description  []string       `json:"description"`
+	Traffic      string         `json:"traffic"`
+	Dist         string         `json:"dist"`
+	Arch         int            `json:"arch"`
+	Lang         string         `json:"lang"`
+	Location     *string        `json:"location"`
+	Datacenter   *string        `json:"datacenter"`
+	CPU          string         `json:"cpu"`
+	CPUBenchmark uint32         `json:"cpu_benchmark"`
+	MemorySize   float64        `json:"memory_size"`
+	HDDSize      float64        `json:"hdd_size"`
+	HDDText      string         `json:"hdd_text"`
+	HDDCount     uint8          `json:"hdd_count"`
+	NetworkSpeed *string        `json:"network_speed"`
 }
 
 // PurchasedAddon represents an addon that was purchased.
