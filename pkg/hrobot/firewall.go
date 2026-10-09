@@ -113,9 +113,9 @@ func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config 
 	// request body. `EncodeToString` keeps the rule keys' brackets
 	// literal so Hetzner actually parses them.
 	additional := map[string]string{
-		"status":       string(config.Status),
+		"status":        string(config.Status),
 		"whitelist_hos": boolToString(config.WhitelistHOS),
-		"filter_ipv6":  boolToString(config.FilterIPv6),
+		"filter_ipv6":   boolToString(config.FilterIPv6),
 	}
 
 	formData := encoder.EncodeToString(additional)
